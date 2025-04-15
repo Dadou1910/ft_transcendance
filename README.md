@@ -1,44 +1,59 @@
-# ft_transcendance
+# 🎮 ft_transcendence
 
-##✅ Liste complète des tâches (obligatoires + modules)
-🔹 ##Obligatoire (core) — à faire impérativement
+> Projet final du tronc commun 42 — jeu Pong multijoueur en ligne avec interface web temps réel.
 
-Site web en SPA (React + TS)
+---
 
-Jouer à Pong sur la même machine (clavier partagé)
+## ✅ Fonctionnalités obligatoires
 
-Matchmaking + tournoi simple (alias, système de file, etc.)
+- [ ] 🎯 **SPA (Single Page Application)** avec React + TypeScript
+- [ ] 🕹️ **Pong local** (2 joueurs sur le même clavier)
+- [ ] 🧩 **Tournoi avec matchmaking**
+- [ ] 🧑‍🎤 **Alias joueur unique par tournoi**
+- [ ] 🐳 **Lancement via une seule commande Docker**
+- [ ] 🔒 **Connexion HTTPS + mots de passe hashés**
+- [ ] 🛡️ **Protection contre les attaques XSS/SQLi + validation des entrées**
+- [ ] 🧪 **Aucune erreur JS dans Firefox dernière version**
 
-Inscription joueur (alias par tournoi)
+---
 
-Tout lancer en une commande Docker
+## 🧩 Modules **majeurs** (4)
 
-Sécurité : HTTPS, mots de passe hashés, pas de failles XSS/SQLi, .env ignoré
+| Module | Description |
+|--------|-------------|
+| 🧱 Backend Framework | Fastify avec Node.js |
+| 👤 Gestion utilisateurs | Auth, profils, avatars, amis, stats |
+| 🌐 Joueurs distants | Multijoueur en ligne avec WebSocket |
+| 💬 Chat en direct | DM, blocage, invitations, accès profils |
 
-    Navigation fluide, sans erreurs JS sur Firefox dernière version
+---
 
-🔸 ##Modules MAJEURS (4)
+## 🧩 Modules **mineurs** (7)
 
-Backend Framework → Fastify + Node.js
+| Module | Description |
+|--------|-------------|
+| 🎨 Personnalisation du jeu | Power-ups, vitesse, map |
+| 📊 Tableaux de stats | Stats utilisateurs et parties |
+| 📱 Support multi-appareils | Responsive sur mobile/tablette |
+| 🧭 Compatibilité navigateur | Support Chrome + Firefox |
+| 🌍 Multilingue | FR, EN, +1 autre |
+| 🦯 Accessibilité | Navigation clavier, contraste, alt text |
+| ⚡ Server-Side Rendering | Amélioration perf + SEO |
 
-Standard User Management → Auth, profils, avatars, amis, historique, stats
+---
 
-Remote Players → Multijoueur distant en temps réel (WebSocket)
+## 🚀 Stack technique (prévisionnelle)
 
-    Live Chat → DM, blocage, invitation à jouer, lien vers profil
+- **Frontend :** React + TypeScript + TailwindCSS
+- **Backend :** Fastify (Node.js)
+- **Base de données :** SQLite
+- **WebSocket :** Socket.IO
+- **Docker :** Conteneurisation totale
+- **Outils divers :** ESLint, Prettier, .env, HTTPS local
 
-🔹 ##Modules MINEURS (7)
+---
 
-Game Customization Options → Map, vitesses, power-ups
+## 📦 Lancement
 
-User & Game Stats Dashboard → Victoires/défaites, graphiques
-
-Support on All Devices → Responsive design (mobile, tablette, etc.)
-
-Expanding Browser Compatibility → Support d’un second navigateur (ex: Chrome)
-
-Multiple Language Support → FR + EN + autre avec système de traduction
-
-Accessibility for Visually Impaired → Navigation clavier, contraste, alt text
-
-Server-Side Rendering (SSR) → Pre-render du contenu (Next.js possible ? Ou manual SSR avec React)
+```bash
+docker-compose up --build
