@@ -17,7 +17,7 @@
 
 ---
 
-## 🧩 Modules **majeurs** (4)
+## Modules **majeurs** (4)
 
 | Module | Description |
 |--------|-------------|
@@ -28,7 +28,7 @@
 
 ---
 
-## 🧩 Modules **mineurs** (7)
+## Modules **mineurs** (7)
 
 | Module | Description |
 |--------|-------------|
@@ -42,7 +42,7 @@
 
 ---
 
-## 🚀 Stack technique (prévisionnelle)
+## Stack technique (prévisionnelle)
 
 - **Frontend :** React + TypeScript + TailwindCSS
 - **Backend :** Fastify (Node.js)
@@ -51,6 +51,41 @@
 - **Docker :** Conteneurisation totale
 - **Outils divers :** ESLint, Prettier, .env, HTTPS local
 
+---
+## Structure 
+```
+bash
+ft_transcendence/
+├── .gitignore
+├── docker-compose.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── src/
+│       └── index.js
+├── frontend/
+│   ├── Dockerfile
+│   ├── index.html
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── public/
+│   │   └── assets/
+│   │       ├── background.png
+│   │       ├── dayBackground.png
+│   │       ├── flower.png
+│   │       ├── peopleBackground.png
+│   │       └── setting.png
+│   └── src/
+│       ├── game.ts
+│       ├── index.ts
+│       ├── router.ts
+│       ├── style.css
+│       ├── tournament.ts
+│       └── ui.ts
+```
 ---
 
 ## 📦 Lancement
