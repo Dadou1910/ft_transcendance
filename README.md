@@ -6,11 +6,11 @@
 
 ## ✅ Fonctionnalités obligatoires
 
-- [ ] 🎯 **SPA (Single Page Application)** avec React + TypeScript
-- [ ] 🕹️ **Pong local** (2 joueurs sur le même clavier)
+- [x] 🎯 **SPA (Single Page Application)** avec TailwindCSS + TypeScript
+- [x] 🕹️ **Pong local** (2 joueurs sur le même clavier)
 - [ ] 🧩 **Tournoi avec matchmaking**
-- [ ] 🧑‍🎤 **Alias joueur unique par tournoi**
-- [ ] 🐳 **Lancement via une seule commande Docker**
+- [x] 🧑‍🎤 **Alias joueur unique par tournoi**
+- [x] 🐳 **Lancement via une seule commande Docker**
 - [ ] 🔒 **Connexion HTTPS + mots de passe hashés**
 - [ ] 🛡️ **Protection contre les attaques XSS/SQLi + validation des entrées**
 - [ ] 🧪 **Aucune erreur JS dans Firefox dernière version**
