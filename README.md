@@ -117,7 +117,7 @@ docker-compose up --build
 Le dossier `backend/` contient le serveur qui gère la logique métier, les API REST, et la communication avec une base de données.
 
 - **`src/index.js`**  
-  Point d'entrée du backend, ce fichier configure et démarre un serveur avec **Fastify** (version 4.24.0). Il écoute sur le port `3000` et définit les routes API (par exemple, `/api/users` pour gérer les utilisateurs, `/api/matches` pour les matchs, ou `/api/tournaments` pour les tournois). Il traite les requêtes HTTP provenant du frontend, comme l'enregistrement des scores ou la récupération des statistiques.
+  Point d'entrée du backend, ce fichier configure et démarre un serveur avec **Fastify** (version 4.24.0). Il écoute sur le port `3000` et définit les routes API (voir dans le fichier frontend/src/index.ts pour voir les routes /* (ex : /login, /tournament, etc.) qui devront etre parametrées pour la sauvegarde de données en backend. Il traite les requêtes HTTP provenant du frontend, comme l'enregistrement des scores ou la récupération des statistiques.
 
 - **`Dockerfile`**  
   Définit comment construire l'image Docker pour le backend :
