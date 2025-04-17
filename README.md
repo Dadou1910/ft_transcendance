@@ -8,12 +8,12 @@
 
 - [x] 🎯 **SPA (Single Page Application)** avec TailwindCSS + TypeScript
 - [x] 🕹️ **Pong local** (2 joueurs sur le même clavier)
-- [ ] 🧩 **Tournoi avec matchmaking**
+- [x] 🧩 **Tournoi avec matchmaking**
 - [x] 🧑‍🎤 **Alias joueur unique par tournoi**
 - [x] 🐳 **Lancement via une seule commande Docker**
-- [ ] 🔒 **Connexion HTTPS + mots de passe hashés**
+- [x] 🔒 **Connexion HTTPS + mots de passe hashés**
 - [ ] 🛡️ **Protection contre les attaques XSS/SQLi + validation des entrées**
-- [ ] 🧪 **Aucune erreur JS dans Firefox dernière version**
+- [x] 🧪 **Aucune erreur JS dans Firefox dernière version**
 
 ---
 
@@ -21,24 +21,24 @@
 
 | Module | Description |
 |--------|-------------|
-| 🧱 Backend Framework | Fastify avec Node.js |
-| 👤 Gestion utilisateurs | Auth, profils, avatars, amis, stats |
-| 🌐 Joueurs distants | Multijoueur en ligne avec WebSocket |
-| 💬 Chat en direct | DM, blocage, invitations, accès profils |
+| Backend Framework | Fastify avec Node.js |
+| Gestion utilisateurs | Auth, profils, avatars, amis, stats |
+| Live chat | DM, blocage, invitations, accès profils |
 
 ---
 
-## Modules **mineurs** (7)
+## Modules **mineurs** (8)
 
 | Module | Description |
 |--------|-------------|
-| 🎨 Personnalisation du jeu | Power-ups, vitesse, map |
-| 📊 Tableaux de stats | Stats utilisateurs et parties |
-| 📱 Support multi-appareils | Responsive sur mobile/tablette |
-| 🧭 Compatibilité navigateur | Support Chrome + Firefox |
-| 🌍 Multilingue | FR, EN, +1 autre |
-| 🦯 Accessibilité | Navigation clavier, contraste, alt text |
-| ⚡ Server-Side Rendering | Amélioration perf + SEO |
+| Personnalisation du jeu | Power-ups, vitesse, map |
+| Utilisation de frontend Framework | TailwindCSS |
+| Tableaux de stats | Stats utilisateurs et parties |
+| Support multi-appareils | Responsive sur mobile/tablette |
+| Compatibilité navigateur | Support Chrome + Firefox |
+| Multilingue | FR, EN, +1 autre |
+| Accessibilité | Navigation clavier, contraste, alt text |
+| Utilisation de Database en backend | Gestion de données |
 
 ---
 
@@ -49,7 +49,6 @@
 - **Base de données :** SQLite
 - **WebSocket :** Socket.IO
 - **Docker :** Conteneurisation totale
-- **Outils divers :** ESLint, Prettier, .env, HTTPS local
 
 ---
 ## Structure 
@@ -95,19 +94,11 @@ ft_transcendence/
 ```
 ---
 
-## 📦 Lancement
+## Lancement
 
 ```bash
 docker-compose up --build
 ```
-# Pong Transcendence
-
-Ce projet est une application web de type **Pong Transcendence**, une version améliorée du jeu classique Pong avec des fonctionnalités avancées comme des tournois, des statistiques, et une interface utilisateur moderne. Il est structuré en deux parties principales : un **backend** et un **frontend**, orchestrés via Docker pour faciliter le développement et le déploiement.
-
-## Structure du projet
-
-Le projet est organisé avec une séparation claire entre le backend (logique serveur) et le frontend (interface utilisateur). Voici une explication détaillée de chaque partie, basée sur les fichiers fournis et les informations déduites.
-
 ### Racine du projet
 
 - **`.env`**  
@@ -119,17 +110,11 @@ Le projet est organisé avec une séparation claire entre le backend (logique se
 - **`docker-compose.yml`**  
   Orchestre les services Docker pour le projet. Il inclut le backend (port `3000`) et le frontend (port `5173` en développement, `80` en production via Nginx). Ce fichier définit également les dépendances entre services, comme une éventuelle base de données.
 
-- **`README.md`**  
-  Vous êtes en train de le lire ! Ce document fournit une vue d'ensemble du projet, des instructions pour l'installation, le démarrage, et l'utilisation.
-
-- **`update_translations.sh`**  
-  Un script shell pour gérer les traductions (internationalisation). Il automatise probablement la génération ou la synchronisation des fichiers de langue pour supporter plusieurs langues dans l'application.
-
 ---
 
 ### Backend
 
-Le dossier `backend/` contient le serveur qui gère la logique métier, les API REST, et éventuellement la communication avec une base de données.
+Le dossier `backend/` contient le serveur qui gère la logique métier, les API REST, et la communication avec une base de données.
 
 - **`src/index.js`**  
   Point d'entrée du backend, ce fichier configure et démarre un serveur avec **Fastify** (version 4.24.0). Il écoute sur le port `3000` et définit les routes API (par exemple, `/api/users` pour gérer les utilisateurs, `/api/matches` pour les matchs, ou `/api/tournaments` pour les tournois). Il traite les requêtes HTTP provenant du frontend, comme l'enregistrement des scores ou la récupération des statistiques.
@@ -138,7 +123,7 @@ Le dossier `backend/` contient le serveur qui gère la logique métier, les API 
   Définit comment construire l'image Docker pour le backend :
   - Utilise `node:18-alpine` comme image de base, une version légère de Node.js 18.
   - Définit `/app` comme répertoire de travail.
-  - Copie les fichiers `package.json` et `package-lock.json` (si présent), puis installe les dépendances avec `npm install`.
+  - Copie les fichiers `package.json` et `package-lock.json` puis installe les dépendances avec `npm install`.
   - Copie le reste des fichiers du projet (y compris `src/index.js`).
   - Expose le port `3000`, sur lequel le serveur Fastify écoute.
   - Lance le serveur avec `npm start`, qui exécute `node src/index.js`.
@@ -156,7 +141,7 @@ Le dossier `backend/` contient le serveur qui gère la logique métier, les API 
 
 ### Frontend
 
-Le dossier `frontend/` contient l'application cliente, une interface utilisateur développée avec **React**, **TypeScript**, **Vite**, et **Tailwind CSS**.
+Le dossier `frontend/` contient l'application cliente, une interface utilisateur développée avec **TypeScript**, **Vite**, et **Tailwind CSS**.
 
 - **`public/assets/`**  
   Contient les ressources statiques utilisées dans l'interface utilisateur :
@@ -175,8 +160,8 @@ Le dossier `frontend/` contient l'application cliente, une interface utilisateur
   - **`game.ts`**  
     Contient la logique principale du jeu Pong. Gère le rendu sur un canvas HTML, les mouvements des raquettes, le déplacement de la balle, les collisions, et les scores. Inclut des fonctionnalités comme la pause et le redémarrage.
 
-  - **`index.tsx`**  
-    Point d'entrée du frontend React. Configure l'application React, rend le composant racine dans `<div id="app">` (défini dans `index.html`), et intègre le routeur (`router.ts`) pour gérer la navigation.
+  - **`index.ts`**  
+    Point d'entrée du frontend. Configure l'application, rend le composant racine dans `<div id="app">` (défini dans `index.html`), et intègre le routeur (`router.ts`) pour gérer la navigation.
 
   - **`neonCityPong.tsx`**  
     Implémente une variante du jeu Pong avec un thème "Neon City", incluant des effets visuels spécifiques (couleurs néon, animations) tout en réutilisant la logique de `game.ts`.
@@ -241,7 +226,6 @@ Le dossier `frontend/` contient l'application cliente, une interface utilisateur
 ## Résumé général
 
 - **Backend** : Fournit une API REST avec **Fastify** (version 4.24.0) pour gérer les données (utilisateurs, matchs, tournois). Écoute sur le port `3000`. Construit avec Node.js 18 et lancé avec `npm start` (qui exécute `node src/index.js`).
-- **Frontend** : Application React avec TypeScript, utilisant Vite et Tailwind CSS. Le jeu Pong est rendu dans un canvas, avec des fonctionnalités comme des tournois et des statistiques. Accessible sur le port `5173` en développement et `80` en production (via Nginx).
+- **Frontend** : Application avec TypeScript, utilisant Vite et Tailwind CSS. Le jeu Pong est rendu dans un canvas, avec des fonctionnalités comme des tournois et des statistiques. Accessible sur le port `5173` en développement et `80` en production (via Nginx).
 - **Docker** : Le backend utilise `node:18-alpine` pour construire et lancer le serveur sur le port `3000`. Le frontend utilise trois stages (dev, build, prod) pour construire et servir l'application. Le `docker-compose.yml` orchestre les services, reliant le frontend et le backend.
 
-Ce projet suit une architecture client-serveur classique, avec une séparation nette entre le frontend (interface utilisateur interactive) et le backend (logique serveur). Docker facilite le développement et le déploiement, tandis que des outils modernes comme Fastify, Vite, et Tailwind CSS assurent des performances optimales et une bonne expérience de développement.
