@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom styles for the slider */
+/* Custom styles for the speed slider */
 #speedSlider {
   -webkit-appearance: none;
   appearance: none;
@@ -13,6 +13,7 @@
   outline: none;
 }
 
+/* Styling for WebKit slider thumb */
 #speedSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -24,6 +25,7 @@
   border: 2px solid white;
 }
 
+/* Styling for Mozilla slider thumb */
 #speedSlider::-moz-range-thumb {
   width: 20px;
   height: 20px;
@@ -33,6 +35,7 @@
   border: 2px solid white;
 }
 
+/* Global body styles */
 body {
   background-image: url('/assets/dayBackground.png');
   background-repeat: no-repeat;
@@ -43,6 +46,7 @@ body {
   color: white;
 }
 
+/* Background for post-login page */
 #app .post-login-page {
   background-image: url('/assets/peopleBackground.png');
   background-size: cover;
@@ -51,7 +55,7 @@ body {
   background-color: #d8a8b5; /* Fallback */
 }
 
-/* Add visible class for toggling elements */
+/* Class for toggling visibility */
 .visible {
   display: block !important;
 }
@@ -64,11 +68,12 @@ body {
   display: none;
 }
 
+/* Show error message when visible */
 .error-message.visible {
   display: block;
 }
 
-/* Game UI styles */
+/* Game container styles */
 #gameContainer {
   background-image: url('/assets/background.png');
   background-size: cover;
@@ -76,6 +81,7 @@ body {
   background-repeat: no-repeat;
   min-height: 100vh;
   width: 100vw;
+  max-width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -84,24 +90,31 @@ body {
   left: 0;
 }
 
+/* Canvas styles for Pong game */
 #pongCanvas {
   border: 2px solid #f4c2c2;
   background-color: #d8a8b5; /* Matches initial backgroundColor in PongGame */
+  max-width: 100%;
+  height: auto;
 }
 
+/* Score display container */
 .score-container {
   display: flex;
   justify-content: space-around;
-  width: 800px;
+  width: 100%;
+  max-width: 800px;
   font-size: 1.5rem;
   color: white;
   text-shadow: 0 0 10px rgba(255, 182, 193, 0.7);
 }
 
+/* Game area container */
 .game-area {
   position: relative;
 }
 
+/* Settings button styles */
 #settingsButton {
   background-color: #47d2fc;
   color: white;
@@ -112,10 +125,12 @@ body {
   transition: background-color 0.3s;
 }
 
+/* Settings button hover effect */
 #settingsButton:hover {
   background-color: #2a86bb;
 }
 
+/* Settings menu styles */
 #settingsMenu {
   display: none;
   position: absolute;
@@ -128,10 +143,12 @@ body {
   box-shadow: 0 0 10px rgba(255, 182, 193, 0.5);
 }
 
+/* Show settings menu when visible */
 #settingsMenu.visible {
   display: block;
 }
 
+/* Background color select styles */
 #backgroundColorSelect {
   background-color: #f4c2c2;
   color: white;
@@ -140,6 +157,7 @@ body {
   padding: 0.5rem;
 }
 
+/* Restart button styles */
 #restartButton {
   background-color: black;
   color: white;
@@ -150,11 +168,12 @@ body {
   transition: background-color 0.3s;
 }
 
+/* Restart button hover effect */
 #restartButton:hover {
   background-color: #333;
 }
 
-/* Name Entry Form styles */
+/* Name entry form styles */
 #nameEntryForm {
   background-color: rgba(0, 0, 0, 0.8);
   padding: 2rem;
@@ -162,6 +181,7 @@ body {
   box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);
 }
 
+/* Input styles for name entry form */
 #nameEntryForm input {
   background-color: #f4c2c2;
   color: white;
@@ -171,6 +191,7 @@ body {
   margin: 0.5rem 0;
 }
 
+/* Button styles for name entry form */
 #nameEntryForm button {
   background-color: #47d2fc;
   color: white;
@@ -181,6 +202,120 @@ body {
   transition: background-color 0.3s;
 }
 
+/* Name entry form button hover effect */
 #nameEntryForm button:hover {
   background-color: #2a86bb;
+}
+
+/* Tournament round indicator styles */
+.tournament-round {
+  color: white;
+  font-size: 1.25rem;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(255, 182, 193, 0.7);
+  margin-bottom: 0.5rem;
+}
+
+/* Sidebar transition effect */
+.sidebar {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Responsive styles for small screens */
+@media (max-width: 767px) {
+  /* Sidebar styles for mobile */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    transform: translateX(-100%);
+    z-index: 20;
+    height: 100%;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  /* Show sidebar when visible */
+  .sidebar.visible {
+    transform: translateX(0);
+  }
+
+  /* Overlay for sidebar when visible */
+  .sidebar.visible::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
+  }
+
+  /* Reset margin for main content */
+  .md\:ml-64 {
+    margin-left: 0 !important;
+  }
+
+  /* Reset margin-top for main content */
+  .md\:mt-0 {
+    margin-top: 0 !important;
+  }
+
+  /* Adjust main content margin for toggle button */
+  .flex-1 {
+    margin-top: 60px; /* Space for the toggle button */
+  }
+}
+
+/* Responsive styles for low-height screens */
+@media (max-height: 500px) {
+  /* Sidebar styles for low height */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    transform: translateX(-100%);
+    z-index: 20;
+    height: 100%;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  /* Show sidebar when visible */
+  .sidebar.visible {
+    transform: translateX(0);
+  }
+
+  /* Overlay for sidebar when visible */
+  .sidebar.visible::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
+  }
+
+  /* Reset margin for main content */
+  .md\:ml-64 {
+    margin-left: 0 !important;
+  }
+
+  /* Reset margin-top for main content */
+  .md\:mt-0 {
+    margin-top: 0 !important;
+  }
+
+  /* Adjust main content margin for toggle button */
+  .flex-1 {
+    margin-top: 60px; /* Space for the toggle button */
+  }
+
+  /* Adjust margin-top for small height */
+  .mt-48 {
+    margin-top: 60px !important; /* Adjust for small height */
+  }
 }

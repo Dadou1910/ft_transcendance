@@ -1,19 +1,23 @@
+// Manages UI rendering and setup for the Pong Transcendence game
+// Includes welcome pages, game view, forms, and tournament end screen
+
 // ------------------------------------------
 // Section 1: Welcome Page (Pre-Login)
 // ------------------------------------------
-// This section handles the rendering of the welcome page for non-logged-in users.
-
+// Styles for the welcome container
 const WELCOME_CONTAINER_STYLE = `
   bg-black bg-opacity-80 p-8 rounded-lg text-center relative overflow-hidden
   background-size: 20px, 30px; background-position: top left, bottom right;
   background-repeat: no-repeat, no-repeat; box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);
 `;
 
+// Styles for the welcome page buttons
 const WELCOME_BUTTON_STYLE = `
   bg-[#47d2fc] text-white border-none rounded-md py-2 px-5 mt-4 cursor-pointer
   hover:bg-[#2a86bb] transition-colors
 `;
 
+// Renders the pre-login welcome page with register and login buttons
 export function renderWelcomePage(onRegister: () => void, onLogin: () => void): string {
   return `
     <div class="${WELCOME_CONTAINER_STYLE}">
@@ -35,6 +39,7 @@ export function renderWelcomePage(onRegister: () => void, onLogin: () => void): 
   `;
 }
 
+// Sets up event listeners for the welcome page buttons
 export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
   const registerButton = document.getElementById("registerButton") as HTMLButtonElement;
   const loginButton = document.getElementById("loginButton") as HTMLButtonElement;
@@ -45,34 +50,45 @@ export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
 // ------------------------------------------
 // Section 2: Welcome Page (Post-Login)
 // ------------------------------------------
-// This section handles the rendering of the welcome page for logged-in users.
-
+// Styles for the post-login container
 const LOGGED_IN_CONTAINER_STYLE = `
-  flex min-h-screen w-screen h-screen bg-black post-login-page
+  flex flex-col md:flex-row min-h-screen w-screen bg-black post-login-page
 `;
 
+// Styles for the sidebar
 const SIDEBAR_STYLE = `
-  fixed top-0 left-0 w-64 bg-gray-900 bg-opacity-70 p-6 flex flex-col gap-4 h-full
+  w-full md:w-64 md:fixed md:top-0 md:left-0 bg-gray-900 bg-opacity-70 p-6 flex flex-col gap-4 md:h-full sidebar
   style="border-right: 2px solid #f4c2c2; box-shadow: 0 0 10px rgba(255, 182, 193, 0.3);"
 `;
 
+// Styles for the avatar image
 const AVATAR_STYLE = `
   w-24 h-24 rounded-full border-2 border-[#f4c2c2] bg-black object-cover
 `;
 
+// Styles for sidebar links
 const SIDEBAR_LINK_STYLE = `
   text-[#f4c2c2] hover:text-[#ffb6c1] cursor-pointer
 `;
 
+// Styles for the main content area
 const MAIN_CONTENT_STYLE = `
-  flex-1 p-8 flex flex-col items-center justify-center bg-black bg-opacity-80 ml-64
+  flex-1 p-8 flex flex-col items-center justify-center bg-black bg-opacity-90 md:bg-opacity-80 md:ml-64 mt-48 md:mt-0
 `;
 
+// Styles for action buttons
 const ACTION_BUTTON_STYLE = `
   bg-[#f4c2c2] text-white border-none rounded-md py-3 px-8 mt-4 cursor-pointer
   hover:bg-[#ffb6c1] transition-colors text-lg font-semibold
 `;
 
+// Styles for the sidebar toggle button
+const TOGGLE_BUTTON_STYLE = `
+  md:hidden bg-black text-white border-2 border-white rounded-md py-2 px-4 cursor-pointer
+  hover:bg-[#2a86bb] transition-colors fixed top-4 left-4 z-10
+`;
+
+// Renders the post-login welcome page with user info and game options
 export function renderLoggedInWelcomePage(
   username: string,
   email: string,
@@ -81,7 +97,10 @@ export function renderLoggedInWelcomePage(
   const avatarSrc = avatarUrl || '';
   return `
     <div class="${LOGGED_IN_CONTAINER_STYLE}">
-      <div class="${SIDEBAR_STYLE}">
+      <button id="toggleSidebarButton" class="${TOGGLE_BUTTON_STYLE}">
+        Menu
+      </button>
+      <div id="sidebar" class="${SIDEBAR_STYLE}">
         <img
           src="${avatarSrc}"
           class="${AVATAR_STYLE}"
@@ -104,23 +123,47 @@ export function renderLoggedInWelcomePage(
           <button id="playTournamentButton" class="${ACTION_BUTTON_STYLE}">
             Play Tournament
           </button>
-          <button id="playMatchButton" class="${ACTION_BUTTON_STYLE}">
-            Play Match
-          </button>
+          <div class="flex flex-col gap-2">
+            <select id="gameModeSelect" class="${ACTION_BUTTON_STYLE} p-2 rounded-md">
+              <option value="standard">Standard Pong</option>
+              <option value="neonCity">Neon City Pong</option>
+            </select>
+            <button id="playMatchButton" class="${ACTION_BUTTON_STYLE}">
+              Play Match
+            </button>
+          </div>
+        </div>
+        <div class="mt-8 max-w-lg text-white text-lg bg-black bg-opacity-50 p-6 rounded-lg border-2 border-[#f4c2c2] shadow-[0_0_10px_rgba(255,182,193,0.5)]">
+          <h2 class="text-2xl font-bold mb-4" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
+            About Pong
+          </h2>
+          <p class="mb-4">
+            Pong is a classic two-player game where each player controls a paddle to hit a ball back and forth. Use <strong>W</strong> and <strong>S</strong> keys for the left paddle, and <strong>Arrow Up</strong> and <strong>Arrow Down</strong> for the right. Score a point when your opponent misses the ball. The first to 3 points wins the match!
+          </p>
+          <p>
+            Originating in 1972, Pong was created by Atari and is considered one of the first video games, sparking the arcade gaming revolution. Its simple yet addictive gameplay has made it a timeless icon in gaming history.
+          </p>
         </div>
       </div>
     </div>
   `;
 }
 
+// Sets up event listeners for the post-login welcome page
 export function setupLoggedInWelcomePage(
   onLogout: () => void,
   username: string,
-  onPlayMatch: () => void
+  onPlayMatch: () => void,
+  onPlayTournament?: () => void
 ) {
   const logoutLink = document.getElementById("logoutLink") as HTMLAnchorElement;
   const playMatchButton = document.getElementById("playMatchButton") as HTMLButtonElement;
+  const playTournamentButton = document.getElementById("playTournamentButton") as HTMLButtonElement;
+  const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
+  const toggleSidebarButton = document.getElementById("toggleSidebarButton") as HTMLButtonElement;
+  const sidebar = document.getElementById("sidebar") as HTMLDivElement;
 
+  // Attach logout event listener
   if (logoutLink) {
     console.log("Attaching listener to logout link");
     logoutLink.addEventListener("click", (e) => {
@@ -136,11 +179,12 @@ export function setupLoggedInWelcomePage(
     console.error("Logout link not found!");
   }
 
-  if (playMatchButton) {
+  // Attach play match event listener
+  if (playMatchButton && gameModeSelect) {
     console.log("Attaching listener to play match button");
     playMatchButton.addEventListener("click", (e) => {
       e.preventDefault();
-      console.log("Play Match button clicked, calling onPlayMatch");
+      console.log("Play Match button clicked, calling onPlayMatch with mode:", gameModeSelect.value);
       try {
         onPlayMatch();
       } catch (error) {
@@ -148,33 +192,84 @@ export function setupLoggedInWelcomePage(
       }
     });
   } else {
-    console.error("Play Match button not found!");
+    console.error("Play Match button or gameModeSelect not found!");
+  }
+
+  // Attach play tournament event listener
+  if (playTournamentButton && onPlayTournament) {
+    console.log("Attaching listener to play tournament button");
+    playTournamentButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      console.log("Play Tournament button clicked, calling onPlayTournament");
+      try {
+        onPlayTournament();
+      } catch (error) {
+        console.error("Error in onPlayTournament:", error);
+      }
+    });
+  } else {
+    console.error("Play Tournament button or callback not found!");
+  }
+
+  // Attach sidebar toggle event listener
+  if (toggleSidebarButton && sidebar) {
+    console.log("Attaching listener to toggle sidebar button");
+    toggleSidebarButton.addEventListener("click", () => {
+      sidebar.classList.toggle("visible");
+    });
+
+    // Close sidebar when clicking outside
+    document.addEventListener("click", (e) => {
+      const target = e.target as Node;
+      if (
+        sidebar.classList.contains("visible") &&
+        !sidebar.contains(target) &&
+        !toggleSidebarButton.contains(target)
+      ) {
+        sidebar.classList.remove("visible");
+      }
+    });
+  } else {
+    console.error("Toggle sidebar button or sidebar not found!");
   }
 }
 
 // ------------------------------------------
 // Section 3: Name Entry Form (Tournament)
 // ------------------------------------------
-// This section handles the rendering of the name entry form for tournament players.
-
-export function renderNameEntryForm(onSubmit: (left: string, right: string) => void): string {
+// Renders the form for entering tournament player names
+export function renderNameEntryForm(onSubmit: (player1: string, player2: string, player3: string, player4: string) => void): string {
   return `
     <form id="nameEntryForm" class="flex flex-col items-center gap-4">
       <h2 class="text-3xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc;">
         Enter Player Names
       </h2>
       <input
-        id="playerLeftInput"
+        id="player1Input"
         type="text"
         placeholder="Player 1 Name"
-        class="w-64"
+        class="w-full max-w-64"
         required
       />
       <input
-        id="playerRightInput"
+        id="player2Input"
         type="text"
         placeholder="Player 2 Name"
-        class="w-64"
+        class="w-full max-w-64"
+        required
+      />
+      <input
+        id="player3Input"
+        type="text"
+        placeholder="Player 3 Name"
+        class="w-full max-w-64"
+        required
+      />
+      <input
+        id="player4Input"
+        type="text"
+        placeholder="Player 4 Name"
+        class="w-full max-w-64"
         required
       />
       <button type="submit" class="mt-4">
@@ -184,20 +279,29 @@ export function renderNameEntryForm(onSubmit: (left: string, right: string) => v
   `;
 }
 
-export function setupNameForm(onSubmit: (left: string, right: string) => void) {
+// Sets up the tournament name entry form with validation
+export function setupNameForm(onSubmit: (player1: string, player2: string, player3: string, player4: string) => void) {
   const form = document.getElementById("nameEntryForm") as HTMLFormElement;
-  const playerLeftInput = document.getElementById("playerLeftInput") as HTMLInputElement;
-  const playerRightInput = document.getElementById("playerRightInput") as HTMLInputElement;
+  const player1Input = document.getElementById("player1Input") as HTMLInputElement;
+  const player2Input = document.getElementById("player2Input") as HTMLInputElement;
+  const player3Input = document.getElementById("player3Input") as HTMLInputElement;
+  const player4Input = document.getElementById("player4Input") as HTMLInputElement;
 
-  if (form && playerLeftInput && playerRightInput) {
+  // Validate and submit player names
+  if (form && player1Input && player2Input && player3Input && player4Input) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const left = playerLeftInput.value.trim();
-      const right = playerRightInput.value.trim();
-      if (left && right) {
-        onSubmit(left, right);
+      const player1 = player1Input.value.trim();
+      const player2 = player2Input.value.trim();
+      const player3 = player3Input.value.trim();
+      const player4 = player4Input.value.trim();
+
+      // Ensure exactly four non-empty names
+      const enteredNames = [player1, player2, player3, player4].filter(name => name !== '');
+      if (enteredNames.length === 4) {
+        onSubmit(player1, player2, player3, player4);
       } else {
-        alert("Please enter names for both players.");
+        alert("Please enter names for exactly four players.");
       }
     });
   } else {
@@ -208,12 +312,12 @@ export function setupNameForm(onSubmit: (left: string, right: string) => void) {
 // ------------------------------------------
 // Section 4: Game Screen
 // ------------------------------------------
-// This section handles the rendering of the game screen, including the canvas, score, and settings.
-
+// Styles for the score display
 const SCORE_CONTAINER_STYLE = `
-  flex justify-around w-[800px] text-2xl bg-black bg-opacity-50 p-2 rounded-md
+  flex justify-around w-full max-w-[800px] text-2xl bg-black bg-opacity-50 p-2 rounded-md
 `;
 
+// Styles for the settings button
 const SETTINGS_BUTTON_STYLE = `
   bg-black text-white border-2 border-white rounded-md w-10 h-10 cursor-pointer
   hover:bg-gray-700 hover:border-[#ffb6c1]
@@ -221,26 +325,35 @@ const SETTINGS_BUTTON_STYLE = `
   background-repeat: no-repeat; background-position: center;"
 `;
 
+// Styles for the settings menu
 const SETTINGS_MENU_STYLE = `
-  hidden absolute top-full left-0 min-w-[250px] bg-black border-2 border-white rounded-md p-2 z-10
+  hidden absolute top-full left-0 min-w-[250px] max-w-[90vw] bg-black border-2 border-white rounded-md p-2 z-10
   flex flex-col gap-2
 `;
 
+// Styles for select elements
 const SELECT_STYLE = `
   bg-black text-white border-2 border-white rounded-md p-1 w-48 hover:bg-gray-700 appearance-none
   style="background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position: right 10px center;"
 `;
 
+// Styles for the restart button
 const RESTART_BUTTON_STYLE = `
   rounded bg-black text-white border-2 border-white py-2 px-5 transition-opacity
   hover:bg-gray-700
 `;
 
-export function renderGameView(playerLeftName: string, playerRightName: string): string {
+// Renders the game view with player names and optional round number
+export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number): string {
   const leftDisplayName = playerLeftName.trim() || "Player 1";
   const rightDisplayName = playerRightName.trim() || "Player 2";
   return `
     <div id="gameContainer" class="flex flex-col justify-center items-center gap-4">
+      ${roundNumber !== undefined ? `
+        <div class="text-white text-xl font-bold" style="text-shadow: 0 0 10px rgba(255, 182, 193, 0.7);">
+          Tournament ${roundNumber === 0 ? 'Semifinals' : 'Final'}
+        </div>
+      ` : ''}
       <div class="score-container ${SCORE_CONTAINER_STYLE}">
         <span><span id="playerLeftNameDisplay">${leftDisplayName}</span>: <span id="scoreLeft">0</span></span>
         <span><span id="playerRightNameDisplay">${rightDisplayName}</span>: <span id="scoreRight">0</span></span>
@@ -267,7 +380,7 @@ export function renderGameView(playerLeftName: string, playerRightName: string):
           </div>
         </div>
       </div>
-      <button id="restartButton" class="${RESTART_BUTTON_STYLE}">Start</button>
+      <button id="restartButton" class="${SETTINGS_BUTTON_STYLE}">Start</button>
     </div>
   `;
 }
@@ -275,29 +388,32 @@ export function renderGameView(playerLeftName: string, playerRightName: string):
 // ------------------------------------------
 // Section 5: Registration Form
 // ------------------------------------------
-// This section handles the rendering and setup of the registration form view.
-
+// Styles for the registration form container
 const REGISTRATION_FORM_CONTAINER_STYLE = `
-  bg-black bg-opacity-80 p-5 rounded-lg text-center relative overflow-hidden
+  bg-black bg-opacity-80 p-5 rounded-lg text-center relative overflow-hidden mx-auto max-w-screen
   style="background-image: url('/assets/flower.png'), url('/assets/flower.png');
   background-size: 20px, 30px; background-position: top left, bottom right;
   background-repeat: no-repeat, no-repeat; box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);"
 `;
 
+// Styles for form inputs
 const REGISTRATION_FORM_INPUT_STYLE = `
-  bg-gray-800 text-white border-2 border-[#f4c2c2] rounded-md p-2 mt-1
+  bg-gray-800 text-white border-2 border-[#f4c2c2] rounded-md p-2 mt-1 w-full max-w-64
   focus:outline-none focus:border-[#ffb6c1] focus:shadow-[0_0_5px_rgba(255,182,193,0.7)]
 `;
 
+// Styles for the registration form button
 const REGISTRATION_FORM_BUTTON_STYLE = `
   bg-[#f4c2c2] text-white border-none rounded-md py-2 px-5 mt-2 cursor-pointer
   hover:bg-[#ffb6c1] transition-colors
 `;
 
+// Styles for error messages
 const ERROR_MESSAGE_STYLE = `
   text-red-500 text-sm mt-1 hidden
 `;
 
+// Renders the registration form
 export function renderRegistrationForm(onSubmit: (username: string, email: string, password: string, avatar?: File) => void): string {
   return `
     <div id="registrationFormContainer" class="${REGISTRATION_FORM_CONTAINER_STYLE}">
@@ -330,6 +446,7 @@ export function renderRegistrationForm(onSubmit: (username: string, email: strin
   `;
 }
 
+// Sets up the registration form with validation
 export function setupRegistrationForm(onSubmit: (username: string, email: string, password: string, avatar?: File) => void) {
   const form = document.getElementById("registrationForm") as HTMLFormElement;
   if (!form) {
@@ -344,12 +461,13 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
   const emailError = document.getElementById("emailError") as HTMLParagraphElement;
   const passwordError = document.getElementById("passwordError") as HTMLParagraphElement;
 
+  // Handle form submission with validation
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     console.log("Registration form submitted");
     let isValid = true;
 
-    // Username validation: 3-20 characters, alphanumeric
+    // Validate username: 3-20 characters, alphanumeric
     const username = usernameInput.value.trim();
     const usernameRegex = /^[a-zA-Z0-9]{3,20}$/;
     if (!usernameRegex.test(username)) {
@@ -359,7 +477,7 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
       usernameError.classList.add("hidden");
     }
 
-    // Email validation
+    // Validate email
     const email = emailInput.value.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -369,19 +487,19 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
       emailError.classList.add("hidden");
     }
 
-    // Password validation: 8+ characters, 1 number, 1 special character
+    // Validate password: 8+ characters, 1 number, 1 special character
     const password = passwordInput.value;
     const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
     if (!passwordRegex.test(password)) {
       passwordError.classList.remove("hidden");
       isValid = false;
-    } else {
       passwordError.classList.add("hidden");
     }
 
-    // Avatar is optional
+    // Optional avatar
     const avatar = avatarInput.files?.[0];
 
+    // Submit if valid
     if (isValid) {
       console.log("Registration validation passed, calling onSubmit");
       try {
@@ -398,29 +516,32 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
 // ------------------------------------------
 // Section 6: Login Form
 // ------------------------------------------
-// This section handles the rendering and setup of the login form view.
-
+// Styles for the login form container
 const LOGIN_FORM_CONTAINER_STYLE = `
-  bg-black bg-opacity-80 p-5 rounded-lg text-center relative overflow-hidden
+  bg-black bg-opacity-80 p-5 rounded-lg text-center relative overflow-hidden mx-auto max-w-screen
   style="background-image: url('/assets/flower.png'), url('/assets/flower.png');
   background-size: 20px, 30px; background-position: top left, bottom right;
   background-repeat: no-repeat, no-repeat; box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);"
 `;
 
+// Styles for login form inputs
 const LOGIN_FORM_INPUT_STYLE = `
-  bg-gray-800 text-white border-2 border-[#f4c2c2] rounded-md p-2 mt-1
+  bg-gray-800 text-white border-2 border-[#f4c2c2] rounded-md p-2 mt-1 w-full max-w-64
   focus:outline-none focus:border-[#ffb6c1] focus:shadow-[0_0_5px_rgba(255,182,193,0.7)]
 `;
 
+// Styles for the login form button
 const LOGIN_FORM_BUTTON_STYLE = `
   bg-[#f4c2c2] text-white border-none rounded-md py-2 px-5 mt-2 cursor-pointer
   hover:bg-[#ffb6c1] transition-colors
 `;
 
+// Styles for the register link
 const LOGIN_FORM_LINK_STYLE = `
   text-[#f4c2c2] hover:text-[#ffb6c1] underline cursor-pointer
 `;
 
+// Renders the login form
 export function renderLoginForm(onSubmit: (email: string, password: string) => void, onRegister: () => void): string {
   return `
     <div id="loginFormContainer" class="${LOGIN_FORM_CONTAINER_STYLE}">
@@ -448,82 +569,147 @@ export function renderLoginForm(onSubmit: (email: string, password: string) => v
   `;
 }
 
+// Sets up the login form with validation and register link
 export function setupLoginForm(onSubmit: (email: string, password: string) => void, onRegister: () => void) {
-    const form = document.getElementById("loginForm") as HTMLFormElement;
-    let registerLink = document.getElementById("registerLink") as HTMLAnchorElement;
-  
-    if (!form) {
-      console.error("Login form not found!");
-      return;
-    }
-    if (!registerLink) {
-      console.error("Register link not found! Attempting to find after delay...");
-      setTimeout(() => {
-        registerLink = document.getElementById("registerLink") as HTMLAnchorElement;
-        if (!registerLink) {
-          console.error("Register link still not found after delay!");
-          return;
-        }
-        attachRegisterLinkListener(registerLink, onRegister);
-      }, 100);
-    } else {
-      attachRegisterLinkListener(registerLink, onRegister);
-    }
-  
-    const emailInput = document.getElementById("email") as HTMLInputElement;
-    const passwordInput = document.getElementById("password") as HTMLInputElement;
-    const emailError = document.getElementById("emailError") as HTMLParagraphElement;
-    const passwordError = document.getElementById("passwordError") as HTMLParagraphElement;
-  
-    form.addEventListener("submit", (e) => {
-      console.log("Login form submit event triggered");
+  const form = document.getElementById("loginForm") as HTMLFormElement;
+  let registerLink = document.getElementById("registerLink") as HTMLAnchorElement;
+
+  if (!form) {
+    console.error("Login form not found!");
+    return;
+  }
+
+  // Function to attach register link listener
+  function attachRegisterLinkListener(link: HTMLAnchorElement, onRegisterCallback: () => void) {
+    console.log("Attaching listener to register link");
+    link.addEventListener("click", (e) => {
       e.preventDefault();
-  
-      let isValid = true;
-      const email = emailInput.value.trim();
-      const password = passwordInput.value;
-  
-      // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        console.log("Email validation failed:", email);
-        emailError.classList.remove("hidden");
-        isValid = false;
-      } else {
-        emailError.classList.add("hidden");
-      }
-  
-      // Password validation: non-empty
-      if (!password) {
-        console.log("Password validation failed: empty");
-        passwordError.classList.remove("hidden");
-        isValid = false;
-      } else {
-        passwordError.classList.add("hidden");
-      }
-  
-      if (isValid) {
-        console.log("Form validation passed, calling onSubmit with:", { email, password });
-        try {
-          onSubmit(email, password);
-        } catch (error) {
-          console.error("Error during login onSubmit:", error);
-        }
-      } else {
-        console.log("Form validation failed");
+      console.log("Register link clicked, calling onRegister");
+      try {
+        onRegisterCallback();
+      } catch (error) {
+        console.error("Error in onRegister:", error);
       }
     });
-  
-    function attachRegisterLinkListener(link: HTMLAnchorElement, onRegisterCallback: () => void) {
-      console.log("Attaching listener to register link");
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        console.log("Register link clicked, calling onRegister");
-        try {
-          onRegisterCallback();
-        } catch (error) {
-          console.error("Error in onRegister:", error);
-        }
-      });
-    }
   }
+
+  // Handle register link with delay if not found
+  if (!registerLink) {
+    console.error("Register link not found! Attempting to find after delay...");
+    setTimeout(() => {
+      registerLink = document.getElementById("registerLink") as HTMLAnchorElement;
+      if (!registerLink) {
+        console.error("Register link still not found after delay!");
+        return;
+      }
+      attachRegisterLinkListener(registerLink, onRegister);
+    }, 100);
+  } else {
+    attachRegisterLinkListener(registerLink, onRegister);
+  }
+
+  const emailInput = document.getElementById("email") as HTMLInputElement;
+  const passwordInput = document.getElementById("password") as HTMLInputElement;
+  const emailError = document.getElementById("emailError") as HTMLParagraphElement;
+  const passwordError = document.getElementById("passwordError") as HTMLParagraphElement;
+
+  // Handle form submission with validation
+  form.addEventListener("submit", (e) => {
+    console.log("Login form submit event triggered");
+    e.preventDefault();
+
+    let isValid = true;
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log("Email validation failed:", email);
+      emailError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      emailError.classList.add("hidden");
+    }
+
+    // Validate password: non-empty
+    if (!password) {
+      console.log("Password validation failed: empty");
+      passwordError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      passwordError.classList.add("hidden");
+    }
+
+    // Submit if valid
+    if (isValid) {
+      console.log("Form validation passed, calling onSubmit with:", { email, password });
+      try {
+        onSubmit(email, password);
+      } catch (error) {
+        console.error("Error during login onSubmit:", error);
+      }
+    } else {
+      console.log("Form validation failed");
+    }
+  });
+}
+
+// ------------------------------------------
+// Section 7: Tournament End Screen
+// ------------------------------------------
+// Styles for the tournament end container
+const TOURNAMENT_END_CONTAINER_STYLE = `
+  flex flex-col justify-center items-center gap-4 min-h-screen w-screen bg-black bg-opacity-80
+`;
+
+// Styles for the tournament end buttons
+const TOURNAMENT_END_BUTTON_STYLE = `
+  bg-[#47d2fc] text-white border-none rounded-md py-2 px-5 cursor-pointer
+  hover:bg-[#2a86bb] transition-colors
+`;
+
+// Renders the tournament end screen with the winner's name
+export function renderTournamentEnd(winnerName: string): string {
+  return `
+    <div class="${TOURNAMENT_END_CONTAINER_STYLE}">
+      <h1 class="text-5xl text-white font-bold" style="text-shadow: 0 0 10px rgba(0, 0, 255, 0.5);">
+        ${winnerName} Wins!
+      </h1>
+      <div class="flex gap-4">
+        <button id="startAgainButton" class="${TOURNAMENT_END_BUTTON_STYLE}">
+          Start Again
+        </button>
+        <button id="backButton" class="${TOURNAMENT_END_BUTTON_STYLE}">
+          Back
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// Sets up event listeners for the tournament end screen buttons
+export function setupTournamentEnd(onStartAgain: () => void, onBack: () => void) {
+  const startAgainButton = document.getElementById("startAgainButton") as HTMLButtonElement;
+  const backButton = document.getElementById("backButton") as HTMLButtonElement;
+
+  // Attach start again button listener
+  if (startAgainButton) {
+    startAgainButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      onStartAgain();
+    });
+  } else {
+    console.error("Start Again button not found!");
+  }
+
+  // Attach back button listener
+  if (backButton) {
+    backButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      onBack();
+    });
+  } else {
+    console.error("Back button not found!");
+  }
+}

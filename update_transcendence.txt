@@ -26,3 +26,13 @@ Résumé ft_transcendence
   - Les tournois ('tournament.ts')
   - La navigation ('router.ts')
   - L’interface ('ui.ts')
+
+
+Questions :
+ - Pour l'instant le nombre de joueurs pour un tournament est de 4 obligatoirement,
+ est ce que c'est ok pour vous? (ou bien ajouter la possibilite d'en avoir 
+ plus ou moins?)
+
+ Notes :
+  - Les "erreurs" dans VScode sont normales, c'est juste que le module uuid n'est
+  pas installé en local, seulement dans l'environnement Docker
