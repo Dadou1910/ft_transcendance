@@ -1,5 +1,3 @@
-# ⚠️ Utilise une version plus récente de Node pour éviter l’erreur vite/crypto
-
 # === STAGE DE DEV ===
 FROM node:18-alpine AS dev
 WORKDIR /app

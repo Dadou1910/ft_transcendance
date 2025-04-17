@@ -9,6 +9,12 @@ services:
     environment:
       - NODE_ENV=development
     command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
   backend:
     build:
       context: ./backend
@@ -17,3 +23,7 @@ services:
     environment:
       - NODE_ENV=development
     command: npm start
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    restart: unless-stopped
