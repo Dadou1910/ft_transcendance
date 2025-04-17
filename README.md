@@ -99,7 +99,7 @@ ft_transcendence/
 
 ```bash
 docker-compose up --build
-
+```
 # Pong Transcendence
 
 Ce projet est une application web de type **Pong Transcendence**, une version améliorée du jeu classique Pong avec des fonctionnalités avancées comme des tournois, des statistiques, et une interface utilisateur moderne. Il est structuré en deux parties principales : un **backend** et un **frontend**, orchestrés via Docker pour faciliter le développement et le déploiement.
