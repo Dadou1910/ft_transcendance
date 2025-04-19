@@ -92,42 +92,22 @@ export class PongGame {
     // Create and style back button
     this.backButton = document.createElement("button");
     this.backButton.textContent = "Back";
-    this.backButton.style.display = "none";
-    this.backButton.style.padding = "0.5rem 1rem";
-    this.backButton.style.fontSize = "16px";
-    this.backButton.style.cursor = "pointer";
-    this.backButton.style.backgroundColor = "black";
-    this.backButton.style.color = "white";
-    this.backButton.style.border = "2px solid white";
-    this.backButton.style.borderRadius = "0.375rem";
-    this.backButton.style.transition = "background-color 0.3s";
+    this.backButton.classList.add("back-button");
     this.backButton.addEventListener("click", () => {
       this.cleanup();
       this.navigate("/welcome");
     });
-    this.backButton.addEventListener("mouseover", () => {
-      this.backButton.style.backgroundColor = "#333";
-    });
-    this.backButton.addEventListener("mouseout", () => {
-      this.backButton.style.backgroundColor = "black";
-    });
 
-    // Append buttons to game container
-    const gameContainer = document.getElementById("gameContainer");
-    if (gameContainer) {
-      const buttonContainer = document.createElement("div");
-      buttonContainer.style.display = "flex";
-      buttonContainer.style.gap = "1rem";
-      buttonContainer.style.justifyContent = "center";
-      buttonContainer.appendChild(this.restartButton);
+    // Append buttons to button container
+    const buttonContainer = document.getElementById("buttonContainer");
+    if (buttonContainer) {
       buttonContainer.appendChild(this.backButton);
-      gameContainer.appendChild(buttonContainer);
-      // Remove the original restartButton from its current position
+      // Ensure restartButton is in buttonContainer
       if (this.restartButton.parentElement !== buttonContainer) {
-        this.restartButton.remove();
+        buttonContainer.appendChild(this.restartButton);
       }
     } else {
-      console.error("Game container not found, appending buttons to body instead");
+      console.error("Button container not found, appending buttons to body instead");
       document.body.appendChild(this.backButton);
       document.body.appendChild(this.restartButton);
     }
@@ -146,13 +126,10 @@ export class PongGame {
     window.removeEventListener("resize", () => this.resizeCanvas());
   }
 
-  // Resizes canvas based on container size and maintains aspect ratio
+  // Resizes canvas based on browser window size and maintains aspect ratio
   protected resizeCanvas(): void {
-    const container = this.canvas.parentElement;
-    if (!container) return;
-
-    const maxWidth = container.clientWidth * 0.9;
-    const maxHeight = window.innerHeight * 0.7;
+    const maxWidth = window.innerWidth * 0.9; // Use 90% of browser width
+    const maxHeight = window.innerHeight * 0.9; // Use 90% of browser height
     const aspectRatio = this.baseWidth / this.baseHeight;
 
     let newWidth = Math.min(maxWidth, this.baseWidth);
@@ -166,6 +143,10 @@ export class PongGame {
     this.scale = newWidth / this.baseWidth;
     this.canvas.width = newWidth;
     this.canvas.height = newHeight;
+
+    // Center the canvas
+    this.canvas.style.display = "block";
+    this.canvas.style.margin = "auto";
 
     this.ballX = (this.baseWidth / 2) * this.scale;
     this.ballY = (this.baseHeight / 2) * this.scale;
@@ -230,7 +211,7 @@ export class PongGame {
 
     // Handle keyboard controls
     document.addEventListener("keydown", (e) => {
-      if (e.key === " ") {
+      if (e.key === " " && this.gameStarted) {
         this.isPaused = !this.isPaused;
       }
       if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
@@ -280,26 +261,25 @@ export class PongGame {
         this.ballY >= this.paddleLeftY &&
         this.ballY <= this.paddleLeftY + 80 * this.scale
       ) {
-        const ballCenterY = this.ballY;
-        const paddleCenterY = this.paddleLeftY + 40 * this.scale;
         this.ballSpeedX = -this.ballSpeedX;
-        this.ballSpeedY += (ballCenterY - paddleCenterY) / (40 * this.scale) * 2;
       } else if (
         this.ballX + 10 * this.scale >= 10 * this.scale &&
         this.ballX + 10 * this.scale <= 30 * this.scale &&
         this.ballY >= this.paddleLeftY &&
         this.ballY <= this.paddleLeftY + 80 * this.scale
       ) {
-        const ballCenterY = this.ballY;
-        const paddleCenterY = this.paddleLeftY + 40 * this.scale;
         this.ballSpeedX = -this.ballSpeedX;
-        this.ballSpeedY += (ballCenterY - paddleCenterY) / (40 * this.scale) * 2;
       } else if (
         this.ballX >= 10 * this.scale &&
         this.ballX <= 30 * this.scale &&
         (this.ballY - 10 * this.scale <= this.paddleLeftY + 80 * this.scale && this.ballY + 10 * this.scale >= this.paddleLeftY)
       ) {
         this.ballSpeedY = -this.ballSpeedY;
+        if (this.ballY < this.paddleLeftY + 40 * this.scale) {
+          this.ballY = this.paddleLeftY - 10 * this.scale; // Place above paddle
+        } else {
+          this.ballY = this.paddleLeftY + 80 * this.scale + 10 * this.scale; // Place below paddle
+        }
       }
 
       // Bounce off right paddle
@@ -309,26 +289,25 @@ export class PongGame {
         this.ballY >= this.paddleRightY &&
         this.ballY <= this.paddleRightY + 80 * this.scale
       ) {
-        const ballCenterY = this.ballY;
-        const paddleCenterY = this.paddleRightY + 40 * this.scale;
         this.ballSpeedX = -this.ballSpeedX;
-        this.ballSpeedY += (ballCenterY - paddleCenterY) / (40 * this.scale) * 2;
       } else if (
         this.ballX - 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
         this.ballX - 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
         this.ballY >= this.paddleRightY &&
         this.ballY <= this.paddleRightY + 80 * this.scale
       ) {
-        const ballCenterY = this.ballY;
-        const paddleCenterY = this.paddleRightY + 40 * this.scale;
         this.ballSpeedX = -this.ballSpeedX;
-        this.ballSpeedY += (ballCenterY - paddleCenterY) / (40 * this.scale) * 2;
       } else if (
         this.ballX >= (this.baseWidth - 30) * this.scale &&
         this.ballX <= (this.baseWidth - 10) * this.scale &&
         (this.ballY - 10 * this.scale <= this.paddleRightY + 80 * this.scale && this.ballY + 10 * this.scale >= this.paddleRightY)
       ) {
         this.ballSpeedY = -this.ballSpeedY;
+        if (this.ballY < this.paddleRightY + 40 * this.scale) {
+          this.ballY = this.paddleRightY - 10 * this.scale; // Place above paddle
+        } else {
+          this.ballY = this.paddleRightY + 80 * this.scale + 10 * this.scale; // Place below paddle
+        }
       }
 
       // Handle scoring

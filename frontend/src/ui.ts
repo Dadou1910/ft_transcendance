@@ -1,39 +1,33 @@
 // Manages UI rendering and setup for the Pong Transcendence game
 // Includes welcome pages, game view, forms, and tournament end screen
 
+const ERROR_MESSAGE_STYLE = `
+  text-red-500 text-sm mt-1 hidden
+`;
+
 // ------------------------------------------
 // Section 1: Welcome Page (Pre-Login)
 // ------------------------------------------
-// Styles for the welcome container
-const WELCOME_CONTAINER_STYLE = `
-  bg-black bg-opacity-80 p-8 rounded-lg text-center relative overflow-hidden
-  background-size: 20px, 30px; background-position: top left, bottom right;
-  background-repeat: no-repeat, no-repeat; box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);
-`;
-
-// Styles for the welcome page buttons
-const WELCOME_BUTTON_STYLE = `
-  bg-[#47d2fc] text-white border-none rounded-md py-2 px-5 mt-4 cursor-pointer
-  hover:bg-[#2a86bb] transition-colors
-`;
 
 // Renders the pre-login welcome page with register and login buttons
 export function renderWelcomePage(onRegister: () => void, onLogin: () => void): string {
   return `
-    <div class="${WELCOME_CONTAINER_STYLE}">
-      <h1 class="text-5xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc, 0 0 20px #2a86bb;">
-        Pong Transcendence
-      </h1>
-      <p class="text-lg text-[#47d2fc] mb-6">
-        Challenge Your Friends in a Neon Pong Arena
-      </p>
-      <div class="flex flex-col gap-4">
-        <button id="registerButton" class="${WELCOME_BUTTON_STYLE}">
-          Register
-        </button>
-        <button id="loginButton" class="${WELCOME_BUTTON_STYLE}">
-          Login
-        </button>
+    <div class="full-screen-container">
+      <div class="welcome-container">
+        <h1 class="text-5xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc, 0 0 20px #2a86bb;">
+          Pong Transcendence
+        </h1>
+        <p class="text-lg text-[#47d2fc] mb-6">
+          Challenge Your Friends in a Neon Pong Arena
+        </p>
+        <div class="flex flex-col gap-4">
+          <button id="registerButton" class="welcome-button">
+            Register
+          </button>
+          <button id="loginButton" class="welcome-button">
+            Login
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -238,44 +232,50 @@ export function setupLoggedInWelcomePage(
 // Section 3: Name Entry Form (Tournament)
 // ------------------------------------------
 // Renders the form for entering tournament player names
+// ------------------------------------------
+// Tournament Name Entry Form
+// ------------------------------------------
+// Renders the tournament name entry form
 export function renderNameEntryForm(onSubmit: (player1: string, player2: string, player3: string, player4: string) => void): string {
   return `
-    <form id="nameEntryForm" class="flex flex-col items-center gap-4">
-      <h2 class="text-3xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc;">
-        Enter Player Names
-      </h2>
-      <input
-        id="player1Input"
-        type="text"
-        placeholder="Player 1 Name"
-        class="w-full max-w-64"
-        required
-      />
-      <input
-        id="player2Input"
-        type="text"
-        placeholder="Player 2 Name"
-        class="w-full max-w-64"
-        required
-      />
-      <input
-        id="player3Input"
-        type="text"
-        placeholder="Player 3 Name"
-        class="w-full max-w-64"
-        required
-      />
-      <input
-        id="player4Input"
-        type="text"
-        placeholder="Player 4 Name"
-        class="w-full max-w-64"
-        required
-      />
-      <button type="submit" class="mt-4">
-        Start Tournament
-      </button>
-    </form>
+    <div class="full-screen-container">
+      <form id="nameEntryForm" class="flex flex-col items-center gap-4">
+        <h2 class="text-3xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc;">
+          Enter Player Names
+        </h2>
+        <input
+          id="player1Input"
+          type="text"
+          placeholder="Player 1 Name"
+          class="form-input"
+          required
+        />
+        <input
+          id="player2Input"
+          type="text"
+          placeholder="Player 2 Name"
+          class="form-input"
+          required
+        />
+        <input
+          id="player3Input"
+          type="text"
+          placeholder="Player 3 Name"
+          class="form-input"
+          required
+        />
+        <input
+          id="player4Input"
+          type="text"
+          placeholder="Player 4 Name"
+          class="form-input"
+          required
+        />
+        <button type="submit" class="form-button">
+          Start Tournament
+        </button>
+      </form>
+    </div>
   `;
 }
 
@@ -337,10 +337,10 @@ const SELECT_STYLE = `
   style="background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position: right 10px center;"
 `;
 
-// Styles for the restart button
-const RESTART_BUTTON_STYLE = `
-  rounded bg-black text-white border-2 border-white py-2 px-5 transition-opacity
-  hover:bg-gray-700
+// Styles for game control buttons (Start, Back, etc.)
+const GAME_CONTROL_BUTTON_STYLE = `
+  bg-black text-white border-2 border-white rounded-md py-2 px-4 cursor-pointer
+  hover:bg-gray-700 transition-colors font-normal text-base
 `;
 
 // Renders the game view with player names and optional round number
@@ -348,7 +348,7 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
   const leftDisplayName = playerLeftName.trim() || "Player 1";
   const rightDisplayName = playerRightName.trim() || "Player 2";
   return `
-    <div id="gameContainer" class="flex flex-col justify-center items-center gap-4">
+    <div id="gameContainer" class="flex flex-col justify-center items-center gap-4 min-h-screen">
       ${roundNumber !== undefined ? `
         <div class="text-white text-xl font-bold" style="text-shadow: 0 0 10px rgba(255, 182, 193, 0.7);">
           Tournament ${roundNumber === 0 ? 'Semifinals' : 'Final'}
@@ -358,7 +358,7 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
         <span><span id="playerLeftNameDisplay">${leftDisplayName}</span>: <span id="scoreLeft">0</span></span>
         <span><span id="playerRightNameDisplay">${rightDisplayName}</span>: <span id="scoreRight">0</span></span>
       </div>
-      <div class="game-area flex gap-5 items-start">
+      <div class="game-area flex gap-5 items-start relative">
         <canvas id="pongCanvas" width="800" height="400" class="border-2 border-white"></canvas>
         <div id="settingsContainer" class="relative w-10">
           <button id="settingsButton" class="${SETTINGS_BUTTON_STYLE}"></button>
@@ -379,8 +379,10 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
             </div>
           </div>
         </div>
+        <div id="buttonContainer" class="absolute bottom-[-50px] left-1/2 transform -translate-x-1/2 flex gap-4">
+          <button id="restartButton" class="${GAME_CONTROL_BUTTON_STYLE}">Start</button>
+        </div>
       </div>
-      <button id="restartButton" class="${SETTINGS_BUTTON_STYLE}">Start</button>
     </div>
   `;
 }
@@ -388,60 +390,36 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
 // ------------------------------------------
 // Section 5: Registration Form
 // ------------------------------------------
-// Styles for the registration form container
-const REGISTRATION_FORM_CONTAINER_STYLE = `
-  bg-black bg-opacity-80 p-5 rounded-lg text-center relative overflow-hidden mx-auto max-w-screen
-  style="background-image: url('/assets/flower.png'), url('/assets/flower.png');
-  background-size: 20px, 30px; background-position: top left, bottom right;
-  background-repeat: no-repeat, no-repeat; box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);"
-`;
-
-// Styles for form inputs
-const REGISTRATION_FORM_INPUT_STYLE = `
-  bg-gray-800 text-white border-2 border-[#f4c2c2] rounded-md p-2 mt-1 w-full max-w-64
-  focus:outline-none focus:border-[#ffb6c1] focus:shadow-[0_0_5px_rgba(255,182,193,0.7)]
-`;
-
-// Styles for the registration form button
-const REGISTRATION_FORM_BUTTON_STYLE = `
-  bg-[#f4c2c2] text-white border-none rounded-md py-2 px-5 mt-2 cursor-pointer
-  hover:bg-[#ffb6c1] transition-colors
-`;
-
-// Styles for error messages
-const ERROR_MESSAGE_STYLE = `
-  text-red-500 text-sm mt-1 hidden
-`;
-
-// Renders the registration form
 export function renderRegistrationForm(onSubmit: (username: string, email: string, password: string, avatar?: File) => void): string {
   return `
-    <div id="registrationFormContainer" class="${REGISTRATION_FORM_CONTAINER_STYLE}">
-      <h2 class="text-white mb-5 text-2xl" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
-        Create Your Account
-      </h2>
-      <form id="registrationForm" class="flex flex-col gap-4">
-        <div>
-          <label for="username" class="block text-white text-lg">Username:</label>
-          <input type="text" id="username" class="${REGISTRATION_FORM_INPUT_STYLE}" required>
-          <p id="usernameError" class="${ERROR_MESSAGE_STYLE}">Username must be 3-20 characters, alphanumeric only.</p>
-        </div>
-        <div>
-          <label for="email" class="block text-white text-lg">Email:</label>
-          <input type="email" id="email" class="${REGISTRATION_FORM_INPUT_STYLE}" required>
-          <p id="emailError" class="${ERROR_MESSAGE_STYLE}">Please enter a valid email address.</p>
-        </div>
-        <div>
-          <label for="password" class="block text-white text-lg">Password:</label>
-          <input type="password" id="password" class="${REGISTRATION_FORM_INPUT_STYLE}" required>
-          <p id="passwordError" class="${ERROR_MESSAGE_STYLE}">Password must be at least 8 characters, including a number and a special character.</p>
-        </div>
-        <div>
-          <label for="avatar" class="block text-white text-lg">Avatar (Optional):</label>
-          <input type="file" id="avatar" accept="image/*" class="${REGISTRATION_FORM_INPUT_STYLE}">
-        </div>
-        <button type="submit" class="${REGISTRATION_FORM_BUTTON_STYLE}">Register</button>
-      </form>
+    <div class="full-screen-container">
+      <div id="registrationFormContainer" class="registration-form-container">
+        <h2 class="text-white mb-5 text-2xl" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
+          Create Your Account
+        </h2>
+        <form id="registrationForm" class="flex flex-col gap-4">
+          <div>
+            <label for="username" class="block text-white text-lg">Username:</label>
+            <input type="text" id="username" class="form-input" required>
+            <p id="usernameError" class="${ERROR_MESSAGE_STYLE}">Username must be 3-20 characters, alphanumeric only.</p>
+          </div>
+          <div>
+            <label for="email" class="block text-white text-lg">Email:</label>
+            <input type="email" id="email" class="form-input" required>
+            <p id="emailError" class="${ERROR_MESSAGE_STYLE}">Please enter a valid email address.</p>
+          </div>
+          <div>
+            <label for="password" class="block text-white text-lg">Password:</label>
+            <input type="password" id="password" class="form-input" required>
+            <p id="passwordError" class="${ERROR_MESSAGE_STYLE}">Password must be at least 8 characters, including a number and a special character.</p>
+          </div>
+          <div>
+            <label for="avatar" class="block text-white text-lg">Avatar (Optional):</label>
+            <input type="file" id="avatar" accept="image/*" class="form-input">
+          </div>
+          <button type="submit" class="form-button">Register</button>
+        </form>
+      </div>
     </div>
   `;
 }
@@ -493,6 +471,7 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
     if (!passwordRegex.test(password)) {
       passwordError.classList.remove("hidden");
       isValid = false;
+    } else {
       passwordError.classList.add("hidden");
     }
 
@@ -516,55 +495,32 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
 // ------------------------------------------
 // Section 6: Login Form
 // ------------------------------------------
-// Styles for the login form container
-const LOGIN_FORM_CONTAINER_STYLE = `
-  bg-black bg-opacity-80 p-5 rounded-lg text-center relative overflow-hidden mx-auto max-w-screen
-  style="background-image: url('/assets/flower.png'), url('/assets/flower.png');
-  background-size: 20px, 30px; background-position: top left, bottom right;
-  background-repeat: no-repeat, no-repeat; box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);"
-`;
-
-// Styles for login form inputs
-const LOGIN_FORM_INPUT_STYLE = `
-  bg-gray-800 text-white border-2 border-[#f4c2c2] rounded-md p-2 mt-1 w-full max-w-64
-  focus:outline-none focus:border-[#ffb6c1] focus:shadow-[0_0_5px_rgba(255,182,193,0.7)]
-`;
-
-// Styles for the login form button
-const LOGIN_FORM_BUTTON_STYLE = `
-  bg-[#f4c2c2] text-white border-none rounded-md py-2 px-5 mt-2 cursor-pointer
-  hover:bg-[#ffb6c1] transition-colors
-`;
-
-// Styles for the register link
-const LOGIN_FORM_LINK_STYLE = `
-  text-[#f4c2c2] hover:text-[#ffb6c1] underline cursor-pointer
-`;
-
 // Renders the login form
 export function renderLoginForm(onSubmit: (email: string, password: string) => void, onRegister: () => void): string {
   return `
-    <div id="loginFormContainer" class="${LOGIN_FORM_CONTAINER_STYLE}">
-      <h2 class="text-white mb-5 text-2xl" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
-        Login to Your Account
-      </h2>
-      <form id="loginForm" class="flex flex-col gap-4" autocomplete="off">
-        <div>
-          <label for="email" class="block text-white text-lg">Email:</label>
-          <input type="email" id="email" class="${LOGIN_FORM_INPUT_STYLE}" required autocomplete="off">
-          <p id="emailError" class="${ERROR_MESSAGE_STYLE}">Please enter a valid email address.</p>
-        </div>
-        <div>
-          <label for="password" class="block text-white text-lg">Password:</label>
-          <input type="password" id="password" class="${LOGIN_FORM_INPUT_STYLE}" required autocomplete="off">
-          <p id="passwordError" class="${ERROR_MESSAGE_STYLE}">Password is required.</p>
-        </div>
-        <button type="submit" class="${LOGIN_FORM_BUTTON_STYLE}">Login</button>
-      </form>
-      <p class="text-white mt-4">
-        Don't have an account? 
-        <a id="registerLink" class="${LOGIN_FORM_LINK_STYLE}" href="/register">Create one here</a>.
-      </p>
+    <div class="full-screen-container">
+      <div id="loginFormContainer" class="login-form-container">
+        <h2 class="text-white mb-5 text-2xl" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
+          Login to Your Account
+        </h2>
+        <form id="loginForm" class="flex flex-col gap-4" autocomplete="off">
+          <div>
+            <label for="email" class="block text-white text-lg">Email:</label>
+            <input type="email" id="email" class="form-input" required autocomplete="off">
+            <p id="emailError" class="${ERROR_MESSAGE_STYLE}">Please enter a valid email address.</p>
+          </div>
+          <div>
+            <label for="password" class="block text-white text-lg">Password:</label>
+            <input type="password" id="password" class="form-input" required autocomplete="off">
+            <p id="passwordError" class="${ERROR_MESSAGE_STYLE}">Password is required.</p>
+          </div>
+          <button type="submit" class="form-button">Login</button>
+        </form>
+        <p class="text-white mt-4">
+          Don't have an account? 
+          <a id="registerLink" class="form-link" href="/register">Create one here</a>.
+        </p>
+      </div>
     </div>
   `;
 }

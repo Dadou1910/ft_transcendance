@@ -6,10 +6,10 @@
 #speedSlider {
   -webkit-appearance: none;
   appearance: none;
-  width: 12rem;
-  height: 8px;
+  width: 12vw; /* Scale with viewport width */
+  height: 0.8vmin; /* Scale height with viewport (increased for visibility) */
   background: #f4c2c2;
-  border-radius: 5px;
+  border-radius: 0.5vmin; /* Scale border radius */
   outline: none;
 }
 
@@ -17,22 +17,22 @@
 #speedSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 1.8vmin; /* Scale thumb size (slightly increased for visibility) */
+  height: 1.8vmin;
   background: #ffb6c1;
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid white;
+  border: 0.2vmin solid white; /* Scale border */
 }
 
 /* Styling for Mozilla slider thumb */
 #speedSlider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  width: 1.8vmin;
+  height: 1.8vmin;
   background: #ffb6c1;
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid white;
+  border: 0.2vmin solid white;
 }
 
 /* Global body styles */
@@ -116,18 +116,22 @@ body {
 
 /* Settings button styles */
 #settingsButton {
-  background-color: #47d2fc;
-  color: white;
-  border: none;
+  background-color: black;
+  border: 0.15vmin solid white; /* Scale border */
+  min-width: 1vw; /* Scale with viewport width */
   border-radius: 0.375rem;
-  padding: 0.5rem 1rem;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s, border-color 0.3s;
+  background-image: url('/assets/setting.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 /* Settings button hover effect */
 #settingsButton:hover {
-  background-color: #2a86bb;
+  background-color: #333;
+  border-color: #ffb6c1;
 }
 
 /* Settings menu styles */
@@ -135,12 +139,17 @@ body {
   display: none;
   position: absolute;
   top: 100%;
+  right: unset;
   left: 0;
+  min-width: 15vw; /* Scale with viewport width */
+  transform: translateX(-100%);
   background: black;
-  border: 2px solid white;
-  padding: 1rem;
+  border: 0.15vmin solid white; /* Scale border */
+  padding: 1vmin; /* Scale padding */
   border-radius: 0.5rem;
-  box-shadow: 0 0 10px rgba(255, 182, 193, 0.5);
+  box-shadow: 0 0 1vmin rgba(255, 182, 193, 0.5); /* Scale shadow */
+  z-index: 1000; /* Ensure menu appears above game canvas */
+  font-size: 1.5vmin; /* Scale font size */
 }
 
 /* Show settings menu when visible */
@@ -154,22 +163,44 @@ body {
   color: white;
   border: none;
   border-radius: 0.375rem;
-  padding: 0.5rem;
+  padding: 0.6vmin 0.8vmin; /* Scale padding */
+  font-size: 1.5vmin; /* Scale font size */
+  width: 100%; /* Ensure it fits within the menu */
+  box-sizing: border-box; /* Include padding in width */
 }
 
 /* Restart button styles */
 #restartButton {
   background-color: black;
   color: white;
-  border: 2px solid white;
+  border: 0.15vmin solid white; /* Scale border */
   border-radius: 0.375rem;
-  padding: 0.5rem 1rem;
+  padding: 0.6vmin 1.2vmin; /* Scale padding */
+  font-size: 1.5vmin; /* Scale font size */
   cursor: pointer;
   transition: background-color 0.3s;
 }
 
 /* Restart button hover effect */
 #restartButton:hover {
+  background-color: #333;
+}
+
+/* Back button styles */
+.back-button {
+  display: none;
+  background-color: black;
+  color: white;
+  border: 0.15vmin solid white; /* Scale border */
+  border-radius: 0.375rem;
+  padding: 0.6vmin 1.2vmin; /* Scale padding */
+  font-size: 1.5vmin; /* Scale font size */
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+/* Back button hover effect */
+.back-button:hover {
   background-color: #333;
 }
 
@@ -219,6 +250,126 @@ body {
 /* Sidebar transition effect */
 .sidebar {
   transition: transform 0.3s ease-in-out;
+}
+
+/* Full-screen container for welcome and form pages */
+.full-screen-container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Welcome page container */
+.welcome-container {
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 2rem;
+  border-radius: 0.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  max-width: 28rem;
+  width: 100%;
+  margin: 1rem;
+  box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);
+}
+
+/* Welcome page buttons */
+.welcome-button {
+  background-color: #47d2fc;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.5rem 1.25rem;
+  margin-top: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.welcome-button:hover {
+  background-color: #2a86bb;
+}
+
+/* Registration form container */
+.registration-form-container {
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  max-width: 28rem;
+  width: 100%;
+  margin: 1rem;
+  background-image: url('/assets/flower.png'), url('/assets/flower.png');
+  background-size: 20px, 30px;
+  background-position: top left, bottom right;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);
+}
+
+/* Login form container */
+.login-form-container {
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  max-width: 28rem;
+  width: 100%;
+  margin: 1rem;
+  background-image: url('/assets/flower.png'), url('/assets/flower.png');
+  background-size: 20px, 30px;
+  background-position: top left, bottom right;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 15px rgba(255, 182, 193, 0.5);
+}
+
+/* Form inputs */
+.form-input {
+  background-color: #1f2937;
+  color: white;
+  border: 2px solid #f4c2c2;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+  width: 100%;
+  max-width: 16rem;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #ffb6c1;
+  box-shadow: 0 0 5px rgba(255, 182, 193, 0.7);
+}
+
+/* Form buttons */
+.form-button {
+  background-color: #f4c2c2;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.5rem 1.25rem;
+  margin-top: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.form-button:hover {
+  background-color: #ffb6c1;
+}
+
+/* Form link (for login page register link) */
+.form-link {
+  color: #f4c2c2;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.form-link:hover {
+  color: #ffb6c1;
 }
 
 /* Responsive styles for small screens */
