@@ -1,5 +1,5 @@
-import { v4 as uuidv4 } from "uuid";
-import { StatsManager, Player, TournamentMatch } from "./stats";
+const uuidv4 = () => crypto.randomUUID();
+import { StatsManager, Player, TournamentMatch } from "./stats.js";
 
 // Defines the structure of a match in the tournament
 interface Match {

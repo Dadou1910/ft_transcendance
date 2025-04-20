@@ -1,4 +1,4 @@
-import { StatsManager } from "./stats";
+import { StatsManager } from "./stats.js";
 
 // Manages tournament-related functionality and player data
 export class Tournament {

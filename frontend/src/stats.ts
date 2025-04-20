@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+const uuidv4 = () => crypto.randomUUID();
 
 // Defines structure for a match record
 export interface MatchRecord {

@@ -1,4 +1,4 @@
-import { StatsManager } from "./stats";
+import { StatsManager } from "./stats.js";
 
 // Manages the core game logic for Pong Transcendence
 export class PongGame {
@@ -7,7 +7,7 @@ export class PongGame {
   protected ctx: CanvasRenderingContext2D;
   // UI elements for game settings and scores
   protected speedSlider: HTMLInputElement;
-  protected backgroundColorSelect: HTMLSelectElement;
+  protected backgroundColorSelect: HTMLSelectElement | null;
   protected scoreLeftElement: HTMLSpanElement;
   protected scoreRightElement: HTMLSpanElement;
   protected restartButton: HTMLButtonElement;
@@ -77,7 +77,7 @@ export class PongGame {
     this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d") as CanvasRenderingContext2D;
     this.speedSlider = document.getElementById(speedSliderId) as HTMLInputElement;
-    this.backgroundColorSelect = document.getElementById(backgroundColorSelectId) as HTMLSelectElement;
+    this.backgroundColorSelect = document.getElementById(backgroundColorSelectId) as HTMLSelectElement | null;
     this.scoreLeftElement = document.getElementById(scoreLeftId) as HTMLSpanElement;
     this.scoreRightElement = document.getElementById(scoreRightId) as HTMLSpanElement;
     this.restartButton = document.getElementById(restartButtonId) as HTMLButtonElement;
@@ -170,12 +170,16 @@ export class PongGame {
     });
 
     // Update background color based on selection
-    this.backgroundColorSelect.addEventListener("change", (e) => {
-      this.backgroundColor = (e.target as HTMLSelectElement).value;
-      if (this.userEmail) {
-        this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
-      }
-    });
+    if (this.backgroundColorSelect) {
+      this.backgroundColorSelect.addEventListener("change", (e) => {
+        this.backgroundColor = (e.target as HTMLSelectElement).value;
+        if (this.userEmail) {
+          this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+        }
+      });
+    } else {
+      console.warn("Background color select element not found");
+    }
 
     // Toggle settings menu visibility
     this.settingsButton.addEventListener("click", (e) => {

@@ -1,29 +1,13 @@
-version: "3.8"
 services:
   frontend:
     build:
       context: ./frontend
-      target: dev
     ports:
-      - "5173:5173"
-    environment:
-      - NODE_ENV=development
-    command: npm run dev
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
+      - "80:80"
     restart: unless-stopped
   backend:
     build:
       context: ./backend
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=development
-    command: npm start
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
     restart: unless-stopped

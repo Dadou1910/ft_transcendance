@@ -1,7 +1,6 @@
-// Imports UUID generator for unique IDs
-import { v4 as uuidv4 } from "uuid";
+const uuidv4 = () => crypto.randomUUID();
 // Imports Router class for client-side routing
-import { Router } from "./router";
+import { Router } from "./router.js";
 // Imports UI rendering and setup functions for various pages
 import {
   renderWelcomePage,
@@ -17,17 +16,17 @@ import {
   setupLoggedInWelcomePage,
   renderTournamentEnd,
   setupTournamentEnd,
-} from "./ui";
+} from "./ui.js";
 // Imports Tournament class for managing tournament logic
-import { Tournament } from "./tournament";
+import { Tournament } from "./tournament.js";
 // Imports base PongGame class
-import { PongGame } from "./game";
+import { PongGame } from "./game.js";
 // Imports NeonCityPong class for the neon-themed game mode
-import { NeonCityPong } from "./neonCityPong";
+import { NeonCityPong } from "./neonCityPong.js";
 // Imports Bracket class for tournament bracket management
-import { Bracket } from "./bracket";
+import { Bracket } from "./bracket.js";
 // Imports StatsManager and Player type for player statistics
-import { StatsManager, Player } from "./stats";
+import { StatsManager, Player } from "./stats.js";
 
 // Initializes StatsManager for tracking player stats
 const statsManager = new StatsManager();
