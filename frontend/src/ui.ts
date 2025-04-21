@@ -1,10 +1,6 @@
 // Manages UI rendering and setup for the Pong Transcendence game
 // Includes welcome pages, game view, forms, and tournament end screen
 
-const ERROR_MESSAGE_STYLE = `
-  text-red-500 text-sm mt-1 hidden
-`;
-
 // ------------------------------------------
 // Section 1: Welcome Page (Pre-Login)
 // ------------------------------------------
@@ -14,10 +10,10 @@ export function renderWelcomePage(onRegister: () => void, onLogin: () => void): 
   return `
     <div class="full-screen-container">
       <div class="welcome-container">
-        <h1 class="text-5xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc, 0 0 20px #2a86bb;">
+        <h1 class="neon-title">
           Pong Transcendence
         </h1>
-        <p class="text-lg text-[#47d2fc] mb-6">
+        <p class="welcome-subtitle">
           Challenge Your Friends in a Neon Pong Arena
         </p>
         <div class="flex flex-col gap-4">
@@ -44,44 +40,6 @@ export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
 // ------------------------------------------
 // Section 2: Welcome Page (Post-Login)
 // ------------------------------------------
-// Styles for the post-login container
-const LOGGED_IN_CONTAINER_STYLE = `
-  flex flex-col md:flex-row min-h-screen w-screen bg-black post-login-page
-`;
-
-// Styles for the sidebar
-const SIDEBAR_STYLE = `
-  w-full md:w-64 md:fixed md:top-0 md:left-0 bg-gray-900 bg-opacity-70 p-6 flex flex-col gap-4 md:h-full sidebar
-  style="border-right: 2px solid #f4c2c2; box-shadow: 0 0 10px rgba(255, 182, 193, 0.3);"
-`;
-
-// Styles for the avatar image
-const AVATAR_STYLE = `
-  w-24 h-24 rounded-full border-2 border-[#f4c2c2] bg-black object-cover
-`;
-
-// Styles for sidebar links
-const SIDEBAR_LINK_STYLE = `
-  text-[#f4c2c2] hover:text-[#ffb6c1] cursor-pointer
-`;
-
-// Styles for the main content area
-const MAIN_CONTENT_STYLE = `
-  flex-1 p-8 flex flex-col items-center justify-center bg-black bg-opacity-90 md:bg-opacity-80 md:ml-64 mt-48 md:mt-0
-`;
-
-// Styles for action buttons
-const ACTION_BUTTON_STYLE = `
-  bg-[#f4c2c2] text-white border-none rounded-md py-3 px-8 mt-4 cursor-pointer
-  hover:bg-[#ffb6c1] transition-colors text-lg font-semibold
-`;
-
-// Styles for the sidebar toggle button
-const TOGGLE_BUTTON_STYLE = `
-  md:hidden bg-black text-white border-2 border-white rounded-md py-2 px-4 cursor-pointer
-  hover:bg-[#2a86bb] transition-colors fixed top-4 left-4 z-10
-`;
-
 // Renders the post-login welcome page with user info and game options
 export function renderLoggedInWelcomePage(
   username: string,
@@ -90,45 +48,45 @@ export function renderLoggedInWelcomePage(
 ): string {
   const avatarSrc = avatarUrl || '';
   return `
-    <div class="${LOGGED_IN_CONTAINER_STYLE}">
-      <button id="toggleSidebarButton" class="${TOGGLE_BUTTON_STYLE}">
+    <div class="logged-in-container">
+      <button id="toggleSidebarButton" class="toggle-button">
         Menu
       </button>
-      <div id="sidebar" class="${SIDEBAR_STYLE}">
+      <div id="sidebar" class="sidebar">
         <img
           src="${avatarSrc}"
-          class="${AVATAR_STYLE}"
+          class="avatar"
           ${avatarSrc ? '' : 'style="background-color: black;"'}
         />
-        <h2 class="text-white text-xl font-bold">${username}</h2>
-        <p class="text-[#f4c2c2]">${email}</p>
-        <div class="mt-6 flex flex-col gap-2">
-          <a class="${SIDEBAR_LINK_STYLE}">Settings</a>
-          <a class="${SIDEBAR_LINK_STYLE}">Leaderboard</a>
-          <a class="${SIDEBAR_LINK_STYLE}">Profile</a>
-          <a id="logoutLink" class="${SIDEBAR_LINK_STYLE}">Logout</a>
+        <h2 class="sidebar-username">${username}</h2>
+        <p class="sidebar-email">${email}</p>
+        <div class="sidebar-links">
+          <a class="sidebar-link">Settings</a>
+          <a class="sidebar-link">Leaderboard</a>
+          <a class="sidebar-link">Profile</a>
+          <a id="logoutLink" class="sidebar-link">Logout</a>
         </div>
       </div>
-      <div class="${MAIN_CONTENT_STYLE}">
-        <h1 class="text-4xl text-white mb-8 font-bold" style="text-shadow: 0 0 10px rgba(255, 182, 193, 0.7);">
+      <div class="main-content">
+        <h1 class="main-title">
           Welcome, ${username}!
         </h1>
         <div class="flex flex-col gap-6">
-          <button id="playTournamentButton" class="${ACTION_BUTTON_STYLE}">
+          <button id="playTournamentButton" class="action-button">
             Play Tournament
           </button>
           <div class="flex flex-col gap-2">
-            <select id="gameModeSelect" class="${ACTION_BUTTON_STYLE} p-2 rounded-md">
+            <select id="gameModeSelect" class="action-button p-2 rounded-md">
               <option value="standard">Standard Pong</option>
               <option value="neonCity">Neon City Pong</option>
             </select>
-            <button id="playMatchButton" class="${ACTION_BUTTON_STYLE}">
+            <button id="playMatchButton" class="action-button">
               Play Match
             </button>
           </div>
         </div>
-        <div class="mt-8 max-w-lg text-white text-lg bg-black bg-opacity-50 p-6 rounded-lg border-2 border-[#f4c2c2] shadow-[0_0_10px_rgba(255,182,193,0.5)]">
-          <h2 class="text-2xl font-bold mb-4" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
+        <div class="about-pong">
+          <h2 class="about-title">
             About Pong
           </h2>
           <p class="mb-4">
@@ -232,15 +190,11 @@ export function setupLoggedInWelcomePage(
 // Section 3: Name Entry Form (Tournament)
 // ------------------------------------------
 // Renders the form for entering tournament player names
-// ------------------------------------------
-// Tournament Name Entry Form
-// ------------------------------------------
-// Renders the tournament name entry form
 export function renderNameEntryForm(onSubmit: (player1: string, player2: string, player3: string, player4: string) => void): string {
   return `
     <div class="full-screen-container">
-      <form id="nameEntryForm" class="flex flex-col items-center gap-4">
-        <h2 class="text-3xl text-white mb-4 font-bold" style="text-shadow: 0 0 10px #47d2fc;">
+      <form id="nameEntryForm" class="name-entry-form">
+        <h2 class="form-title">
           Enter Player Names
         </h2>
         <input
@@ -312,60 +266,29 @@ export function setupNameForm(onSubmit: (player1: string, player2: string, playe
 // ------------------------------------------
 // Section 4: Game Screen
 // ------------------------------------------
-// Styles for the score display
-const SCORE_CONTAINER_STYLE = `
-  flex justify-around w-full max-w-[800px] text-2xl bg-black bg-opacity-50 p-2 rounded-md
-`;
-
-// Styles for the settings button
-const SETTINGS_BUTTON_STYLE = `
-  bg-black text-white border-2 border-white rounded-md w-10 h-10 cursor-pointer
-  hover:bg-gray-700 hover:border-[#ffb6c1]
-  style="background-image: url('/assets/setting.png'); background-size: 28px 28px;
-  background-repeat: no-repeat; background-position: center;"
-`;
-
-// Styles for the settings menu
-const SETTINGS_MENU_STYLE = `
-  hidden absolute top-full left-0 min-w-[250px] max-w-[90vw] bg-black border-2 border-white rounded-md p-2 z-10
-  flex flex-col gap-2
-`;
-
-// Styles for select elements
-const SELECT_STYLE = `
-  bg-black text-white border-2 border-white rounded-md p-1 w-48 hover:bg-gray-700 appearance-none
-  style="background-image: url('data:image/svg+xml;utf8,<svg fill=\"white\" height=\"24\" viewBox=\"0 0 24 24\" width=\"24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M7 10l5 5 5-5z\"/></svg>'); background-repeat: no-repeat; background-position: right 10px center;"
-`;
-
-// Styles for game control buttons (Start, Back, etc.)
-const GAME_CONTROL_BUTTON_STYLE = `
-  bg-black text-white border-2 border-white rounded-md py-2 px-4 cursor-pointer
-  hover:bg-gray-700 transition-colors font-normal text-base
-`;
-
 // Renders the game view with player names and optional round number
 export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number): string {
   const leftDisplayName = playerLeftName.trim() || "Player 1";
   const rightDisplayName = playerRightName.trim() || "Player 2";
   return `
-    <div id="gameContainer" class="flex flex-col justify-center items-center gap-4 min-h-screen">
+    <div id="gameContainer" class="game-container">
       ${roundNumber !== undefined ? `
-        <div class="text-white text-xl font-bold" style="text-shadow: 0 0 10px rgba(255, 182, 193, 0.7);">
+        <div class="tournament-round">
           Tournament ${roundNumber === 0 ? 'Semifinals' : 'Final'}
         </div>
       ` : ''}
-      <div class="score-container ${SCORE_CONTAINER_STYLE}">
+      <div class="score-container">
         <span><span id="playerLeftNameDisplay">${leftDisplayName}</span>: <span id="scoreLeft">0</span></span>
         <span><span id="playerRightNameDisplay">${rightDisplayName}</span>: <span id="scoreRight">0</span></span>
       </div>
       <div class="game-area flex gap-5 items-start relative">
-        <canvas id="pongCanvas" width="800" height="400" class="border-2 border-white"></canvas>
+        <canvas id="pongCanvas" width="800" height="400" class="pong-canvas"></canvas>
         <div id="settingsContainer" class="relative w-10">
-          <button id="settingsButton" class="${SETTINGS_BUTTON_STYLE}"></button>
-          <div id="settingsMenu" class="${SETTINGS_MENU_STYLE}">
+          <button id="settingsButton" class="settings-button"></button>
+          <div id="settingsMenu" class="settings-menu">
             <div class="flex items-center gap-2">
               <label for="backgroundColorSelect" class="text-white whitespace-nowrap">Color:</label>
-              <select id="backgroundColorSelect" class="${SELECT_STYLE}">
+              <select id="backgroundColorSelect" class="color-select">
                 <option value="#d8a8b5">Pastel Pink</option>
                 <option value="#b8b8d8">Soft Lavender</option>
                 <option value="#a8c8b5">Mint Green</option>
@@ -375,12 +298,13 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
             </div>
             <div class="flex items-center gap-2">
               <label for="speedSlider" class="text-white">Ball Speed:</label>
-              <input type="range" id="speedSlider" min="1" max="10" value="5" class="w-48 h-2 bg-[#f4c2c2] rounded-md outline-none appearance-none">
+              <input type="range" id="speedSlider" min="1" max="10" value="5" class="speed-slider">
             </div>
           </div>
         </div>
-        <div id="buttonContainer" class="absolute bottom-[-50px] left-1/2 transform -translate-x-1/2 flex gap-4">
-          <button id="restartButton" class="${GAME_CONTROL_BUTTON_STYLE}">Start</button>
+        <div id="buttonContainer" class="button-container">
+          <button id="restartButton" class="game-control-button">Start</button>
+          <button id="backButton" class="game-control-button">Back</button>
         </div>
       </div>
     </div>
@@ -390,28 +314,29 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
 // ------------------------------------------
 // Section 5: Registration Form
 // ------------------------------------------
+// Renders the registration form with enhanced password validation warning
 export function renderRegistrationForm(onSubmit: (username: string, email: string, password: string, avatar?: File) => void): string {
   return `
     <div class="full-screen-container">
       <div id="registrationFormContainer" class="registration-form-container">
-        <h2 class="text-white mb-5 text-2xl" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
+        <h2 class="form-title-small">
           Create Your Account
         </h2>
         <form id="registrationForm" class="flex flex-col gap-4">
           <div>
             <label for="username" class="block text-white text-lg">Username:</label>
             <input type="text" id="username" class="form-input" required>
-            <p id="usernameError" class="${ERROR_MESSAGE_STYLE}">Username must be 3-20 characters, alphanumeric only.</p>
+            <p id="usernameError" class="error-message">Username must be 3-20 characters, alphanumeric only.</p>
           </div>
           <div>
             <label for="email" class="block text-white text-lg">Email:</label>
             <input type="email" id="email" class="form-input" required>
-            <p id="emailError" class="${ERROR_MESSAGE_STYLE}">Please enter a valid email address.</p>
+            <p id="emailError" class="error-message">Please enter a valid email address.</p>
           </div>
           <div>
             <label for="password" class="block text-white text-lg">Password:</label>
             <input type="password" id="password" class="form-input" required>
-            <p id="passwordError" class="${ERROR_MESSAGE_STYLE}">Password must be at least 8 characters, including a number and a special character.</p>
+            <p id="passwordError" class="error-message">Password must be at least 8 characters, including a number and a special character.</p>
           </div>
           <div>
             <label for="avatar" class="block text-white text-lg">Avatar (Optional):</label>
@@ -449,30 +374,30 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
     const username = usernameInput.value.trim();
     const usernameRegex = /^[a-zA-Z0-9]{3,20}$/;
     if (!usernameRegex.test(username)) {
-      usernameError.classList.remove("hidden");
+      usernameError.classList.add("visible");
       isValid = false;
     } else {
-      usernameError.classList.add("hidden");
+      usernameError.classList.remove("visible");
     }
 
     // Validate email
     const email = emailInput.value.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      emailError.classList.remove("hidden");
+      emailError.classList.add("visible");
       isValid = false;
     } else {
-      emailError.classList.add("hidden");
+      emailError.classList.remove("visible");
     }
 
     // Validate password: 8+ characters, 1 number, 1 special character
     const password = passwordInput.value;
     const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
     if (!passwordRegex.test(password)) {
-      passwordError.classList.remove("hidden");
+      passwordError.classList.add("visible");
       isValid = false;
     } else {
-      passwordError.classList.add("hidden");
+      passwordError.classList.remove("visible");
     }
 
     // Optional avatar
@@ -500,19 +425,19 @@ export function renderLoginForm(onSubmit: (email: string, password: string) => v
   return `
     <div class="full-screen-container">
       <div id="loginFormContainer" class="login-form-container">
-        <h2 class="text-white mb-5 text-2xl" style="text-shadow: 0 0 5px rgba(255, 182, 193, 0.7);">
+        <h2 class="form-title-small">
           Login to Your Account
         </h2>
         <form id="loginForm" class="flex flex-col gap-4" autocomplete="off">
           <div>
             <label for="email" class="block text-white text-lg">Email:</label>
             <input type="email" id="email" class="form-input" required autocomplete="off">
-            <p id="emailError" class="${ERROR_MESSAGE_STYLE}">Please enter a valid email address.</p>
+            <p id="emailError" class="error-message">Please enter a valid email address.</p>
           </div>
           <div>
             <label for="password" class="block text-white text-lg">Password:</label>
             <input type="password" id="password" class="form-input" required autocomplete="off">
-            <p id="passwordError" class="${ERROR_MESSAGE_STYLE}">Password is required.</p>
+            <p id="passwordError" class="error-message">Password is required.</p>
           </div>
           <button type="submit" class="form-button">Login</button>
         </form>
@@ -614,29 +539,18 @@ export function setupLoginForm(onSubmit: (email: string, password: string) => vo
 // ------------------------------------------
 // Section 7: Tournament End Screen
 // ------------------------------------------
-// Styles for the tournament end container
-const TOURNAMENT_END_CONTAINER_STYLE = `
-  flex flex-col justify-center items-center gap-4 min-h-screen w-screen bg-black bg-opacity-80
-`;
-
-// Styles for the tournament end buttons
-const TOURNAMENT_END_BUTTON_STYLE = `
-  bg-[#47d2fc] text-white border-none rounded-md py-2 px-5 cursor-pointer
-  hover:bg-[#2a86bb] transition-colors
-`;
-
 // Renders the tournament end screen with the winner's name
 export function renderTournamentEnd(winnerName: string): string {
   return `
-    <div class="${TOURNAMENT_END_CONTAINER_STYLE}">
-      <h1 class="text-5xl text-white font-bold" style="text-shadow: 0 0 10px rgba(0, 0, 255, 0.5);">
+    <div class="tournament-end-container">
+      <h1 class="tournament-winner">
         ${winnerName} Wins!
       </h1>
       <div class="flex gap-4">
-        <button id="startAgainButton" class="${TOURNAMENT_END_BUTTON_STYLE}">
+        <button id="startAgainButton" class="tournament-end-button">
           Start Again
         </button>
-        <button id="backButton" class="${TOURNAMENT_END_BUTTON_STYLE}">
+        <button id="backButton" class="tournament-end-button">
           Back
         </button>
       </div>

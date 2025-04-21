@@ -16,6 +16,7 @@ interface PowerUp {
   y: number;
   type: "speedBoost" | "paddleExtend";
   active: boolean;
+  side: "left" | "right";
 }
 
 // Extends the base PongGame class to create a neon-themed version with additional features
@@ -30,8 +31,6 @@ export class NeonCityPong extends PongGame {
   private readonly POWER_UP_SPAWN_INTERVAL: number;
   // Stores the animation frame ID for the game loop
   private animationFrameId: number | null = null;
-  // Back button element for navigation
-  protected backButton: HTMLButtonElement;
   // Heights for left and right paddles, which can change with power-ups
   private paddleLeftHeight: number = 80;
   private paddleRightHeight: number = 80;
@@ -44,6 +43,22 @@ export class NeonCityPong extends PongGame {
   protected backgroundColorSelect: HTMLSelectElement | null = null;
   // Static background image
   private backgroundImage: HTMLImageElement | null = null;
+  // Store the background color select ID for re-fetching if needed
+  private readonly backgroundColorSelectId: string;
+  // Background color with default value
+  protected backgroundColor: string = "#d8a8b5";
+  // Tracks if speed boost is active
+  private isSpeedBoosted: boolean = false;
+  // Stores the boosted speed values
+  private boostedSpeedX: number = 0;
+  private boostedSpeedY: number = 0;
+  // Tracks active power-up effects
+  private leftSpeedBoostActive: boolean = false;
+  private rightSpeedBoostActive: boolean = false;
+  private leftPaddleExtendActive: boolean = false;
+  private rightPaddleExtendActive: boolean = false;
+  // Maximum speed limit for the ball
+  private readonly MAX_SPEED_INCREASE: number = 1.5; // 50% above base speed
 
   // Constructor initializes the game with player names, DOM element IDs, and other dependencies
   constructor(
@@ -82,6 +97,7 @@ export class NeonCityPong extends PongGame {
       navigate
     );
     this.navigate = navigate;
+    this.backgroundColorSelectId = backgroundColorSelectId; // Store the ID for later use
     // Checks if canvas context is initialized
     if (!this.ctx) {
       console.error("Canvas context not initialized!");
@@ -92,9 +108,9 @@ export class NeonCityPong extends PongGame {
     buildingImage.src = "assets/buildingBlock.png";
     // Initializes buildings with position, size, speed, and image
     this.buildings = [
-      { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 1 * this.scale, image: buildingImage },
-      { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -1 * this.scale, image: buildingImage },
-      { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 1.5 * this.scale, image: buildingImage },
+      { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 0.5 * this.scale, image: buildingImage },
+      { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -0.5 * this.scale, image: buildingImage },
+      { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 0.75 * this.scale, image: buildingImage },
     ];
     // Initializes empty power-ups array
     this.powerUps = [];
@@ -102,30 +118,6 @@ export class NeonCityPong extends PongGame {
     this.powerUpTimer = 0;
     // Sets power-up spawn interval
     this.POWER_UP_SPAWN_INTERVAL = 500;
-
-    // Creates and styles the back button
-    this.backButton = document.createElement("button");
-    this.backButton.textContent = "Back";
-    this.backButton.classList.add("back-button");
-    // Adds click event to navigate to welcome page
-    this.backButton.addEventListener("click", () => {
-      this.cleanup();
-      this.navigate("/welcome");
-    });
-
-    // Appends buttons to button container
-    const buttonContainer = document.getElementById("buttonContainer");
-    if (buttonContainer) {
-      buttonContainer.appendChild(this.backButton);
-      // Ensure restartButton is in buttonContainer
-      if (this.restartButton.parentElement !== buttonContainer) {
-        buttonContainer.appendChild(this.restartButton);
-      }
-    } else {
-      console.error("Button container not found, appending buttons to body instead");
-      document.body.appendChild(this.backButton);
-      document.body.appendChild(this.restartButton);
-    }
 
     // Initialize background image
     this.backgroundImage = new Image();
@@ -161,7 +153,8 @@ export class NeonCityPong extends PongGame {
       this.resizeCanvas();
       this.initBackgroundCanvas();
     });
-    this.startAnimation();
+    // this Wrote a comment for clarity
+    // this.startAnimation();
   }
 
   // Initializes the offscreen background canvas
@@ -206,9 +199,14 @@ export class NeonCityPong extends PongGame {
     this.ballY = (this.baseHeight / 2) * this.scale;
     this.paddleLeftY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleRightY = (this.baseHeight / 2 - 40) * this.scale;
-    this.ballSpeedX = 5 * this.scale;
-    this.ballSpeedY = 3 * this.scale;
-    this.paddleSpeed = 5 * this.scale;
+    // Initialize ball speed with slider value
+    const speedMultiplier = parseInt(this.speedSlider.value) / 10; // Reduced for finer control
+    this.ballSpeedX = 1.5 * this.scale * speedMultiplier; // Reduced base speed
+    this.ballSpeedY = 0.9 * this.scale * speedMultiplier; // Reduced base speed
+    this.isSpeedBoosted = false; // Reset speed boost
+    this.boostedSpeedX = 0;
+    this.boostedSpeedY = 0;
+    this.paddleSpeed = 7 * this.scale;
     this.paddleLeftHeight = 80 * this.scale;
     this.paddleRightHeight = 80 * this.scale;
 
@@ -216,57 +214,58 @@ export class NeonCityPong extends PongGame {
     const buildingImage = new Image();
     buildingImage.src = "assets/buildingBlock.png";
     this.buildings = [
-      { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 1 * this.scale, image: buildingImage },
-      { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -1 * this.scale, image: buildingImage },
-      { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 1.5 * this.scale, image: buildingImage },
+      { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 0.5 * this.scale, image: buildingImage },
+      { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -0.5 * this.scale, image: buildingImage },
+      { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 0.75 * this.scale, image: buildingImage },
     ];
     this.powerUps = [];
     this.powerUpTimer = 0;
-  }
-
-  // Starts the animation loop
-  private startAnimation(): void {
-    if (this.animationFrameId === null) {
-      this.animationFrameId = requestAnimationFrame(this.draw);
-    }
-  }
-
-  // Cleans up resources when the game is stopped
-  public cleanup(): void {
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-      console.log("Animation loop stopped for NeonCityPong");
-    }
-    if (this.backButton) {
-      this.backButton.remove();
-    }
-    window.removeEventListener("resize", () => {
-      this.resizeCanvas();
-      this.initBackgroundCanvas();
-    });
+    // Reset power-up effect flags
+    this.leftSpeedBoostActive = false;
+    this.rightSpeedBoostActive = false;
+    this.leftPaddleExtendActive = false;
+    this.rightPaddleExtendActive = false;
   }
 
   // Spawns a power-up at a random position near a paddle
   private spawnPowerUp(): void {
-    const type = Math.random() > 0.5 ? "speedBoost" : "paddleExtend";
-    const isLeftPaddle = Math.random() > 0.5;
-    const x = isLeftPaddle ? 20 * this.scale : (this.baseWidth - 20) * this.scale;
+    // Check if power-ups can be spawned
+    const canSpawnLeftSpeed = !this.leftSpeedBoostActive && !this.powerUps.some(p => p.active && p.type === "speedBoost" && p.side === "left");
+    const canSpawnRightSpeed = !this.rightSpeedBoostActive && !this.powerUps.some(p => p.active && p.type === "speedBoost" && p.side === "right");
+    const canSpawnLeftPaddle = !this.leftPaddleExtendActive && !this.powerUps.some(p => p.active && p.type === "paddleExtend" && p.side === "left");
+    const canSpawnRightPaddle = !this.rightPaddleExtendActive && !this.powerUps.some(p => p.active && p.type === "paddleExtend" && p.side === "right");
+
+    // Exit if no power-ups can be spawned
+    if (!canSpawnLeftSpeed && !canSpawnRightSpeed && !canSpawnLeftPaddle && !canSpawnRightPaddle) {
+      return;
+    }
+
+    // Randomly select a side and type
+    const possibleSpawns: { type: "speedBoost" | "paddleExtend"; side: "left" | "right" }[] = [];
+    if (canSpawnLeftSpeed) possibleSpawns.push({ type: "speedBoost", side: "left" });
+    if (canSpawnRightSpeed) possibleSpawns.push({ type: "speedBoost", side: "right" });
+    if (canSpawnLeftPaddle) possibleSpawns.push({ type: "paddleExtend", side: "left" });
+    if (canSpawnRightPaddle) possibleSpawns.push({ type: "paddleExtend", side: "right" });
+
+    if (possibleSpawns.length === 0) return;
+
+    const spawn = possibleSpawns[Math.floor(Math.random() * possibleSpawns.length)];
+    const x = spawn.side === "left" ? 20 * this.scale : (this.baseWidth - 20) * this.scale;
     const y = Math.random() * (this.canvas.height - 20 * this.scale) + 10 * this.scale;
 
     if (!this.powerUps) {
       console.warn("powerUps array is undefined, reinitializing...");
       this.powerUps = [];
     }
-    this.powerUps.push({ x, y, type, active: true });
+    this.powerUps.push({ x, y, type: spawn.type, active: true, side: spawn.side });
+    console.log(`Spawned ${spawn.type} power-up on ${spawn.side} side`);
   }
 
   // Draws the neon-themed background
   private drawNeonBackground(ctx: CanvasRenderingContext2D): void {
     console.log("Drawing neon background");
     const canvas = ctx.canvas;
-    // Use the selected background color or default to #1A1A2E
-    ctx.fillStyle = this.backgroundColorSelect?.value || "#1A1A2E";
+    ctx.fillStyle = this.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw the static background image, stretched to fit canvas width and aligned at the bottom
@@ -289,9 +288,9 @@ export class NeonCityPong extends PongGame {
       const buildingImage = new Image();
       buildingImage.src = "assets/buildingBlock.png";
       this.buildings = [
-        { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 1 * this.scale, image: buildingImage },
-        { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -1 * this.scale, image: buildingImage },
-        { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 1.5 * this.scale, image: buildingImage },
+        { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 0.5 * this.scale, image: buildingImage },
+        { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -0.5 * this.scale, image: buildingImage },
+        { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 0.75 * this.scale, image: buildingImage },
       ];
     }
     this.buildings.forEach(building => {
@@ -334,6 +333,13 @@ export class NeonCityPong extends PongGame {
     this.powerUps.forEach(powerUp => {
       if (!powerUp.active) return;
 
+      // Calculate base speed from slider for max speed cap
+      const speedMultiplier = parseInt(this.speedSlider.value) / 10;
+      const baseSpeedX = 1.5 * this.scale * speedMultiplier;
+      const baseSpeedY = 0.9 * this.scale * speedMultiplier;
+      const maxSpeedX = baseSpeedX * this.MAX_SPEED_INCREASE;
+      const maxSpeedY = baseSpeedY * this.MAX_SPEED_INCREASE;
+
       // Defines left paddle boundaries
       const leftPaddle = {
         x: 10 * this.scale,
@@ -350,14 +356,21 @@ export class NeonCityPong extends PongGame {
       ) {
         powerUp.active = false;
         if (powerUp.type === "speedBoost") {
-          this.ballSpeedX *= 1.5;
-          this.ballSpeedY *= 1.5;
-          console.log("Speed Boost activated for left paddle!");
+          // Apply speed boost with cap
+          this.isSpeedBoosted = true;
+          this.boostedSpeedX = Math.min(this.ballSpeedX * 1.5, maxSpeedX * Math.sign(this.ballSpeedX));
+          this.boostedSpeedY = Math.min(this.ballSpeedY * 1.5, maxSpeedY * Math.sign(this.ballSpeedY));
+          this.ballSpeedX = this.boostedSpeedX;
+          this.ballSpeedY = this.boostedSpeedY;
+          this.leftSpeedBoostActive = true;
+          console.log(`Speed Boost activated for left paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
         } else if (powerUp.type === "paddleExtend") {
           this.paddleLeftHeight = 120 * this.scale;
+          this.leftPaddleExtendActive = true;
           console.log("Left paddle extended!");
           setTimeout(() => {
             this.paddleLeftHeight = 80 * this.scale;
+            this.leftPaddleExtendActive = false;
             console.log("Left paddle reverted to normal size");
           }, 5000);
         }
@@ -379,14 +392,21 @@ export class NeonCityPong extends PongGame {
       ) {
         powerUp.active = false;
         if (powerUp.type === "speedBoost") {
-          this.ballSpeedX *= 1.5;
-          this.ballSpeedY *= 1.5;
-          console.log("Speed Boost activated for right paddle!");
+          // Apply speed boost with cap
+          this.isSpeedBoosted = true;
+          this.boostedSpeedX = Math.min(this.ballSpeedX * 1.5, maxSpeedX * Math.sign(this.ballSpeedX));
+          this.boostedSpeedY = Math.min(this.ballSpeedY * 1.5, maxSpeedY * Math.sign(this.ballSpeedY));
+          this.ballSpeedX = this.boostedSpeedX;
+          this.ballSpeedY = this.boostedSpeedY;
+          this.rightSpeedBoostActive = true;
+          console.log(`Speed Boost activated for right paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
         } else if (powerUp.type === "paddleExtend") {
           this.paddleRightHeight = 120 * this.scale;
+          this.rightPaddleExtendActive = true;
           console.log("Right paddle extended!");
           setTimeout(() => {
             this.paddleRightHeight = 80 * this.scale;
+            this.rightPaddleExtendActive = false;
             console.log("Right paddle reverted to normal size");
           }, 5000);
         }
@@ -401,61 +421,85 @@ export class NeonCityPong extends PongGame {
       const buildingImage = new Image();
       buildingImage.src = "assets/buildingBlock.png";
       this.buildings = [
-        { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 1 * this.scale, image: buildingImage },
-        { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -1 * this.scale, image: buildingImage },
-        { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 1.5 * this.scale, image: buildingImage },
+        { x: 200 * this.scale, y: 100 * this.scale, width: 30 * this.scale, height: 80 * this.scale, speed: 0.5 * this.scale, image: buildingImage },
+        { x: 300 * this.scale, y: 300 * this.scale, width: 40 * this.scale, height: 120 * this.scale, speed: -0.5 * this.scale, image: buildingImage },
+        { x: 600 * this.scale, y: 200 * this.scale, width: 25 * this.scale, height: 100 * this.scale, speed: 0.75 * this.scale, image: buildingImage },
       ];
     }
+  
+    let collisionHandled = false; // Flag to process only one collision per frame
+  
     this.buildings.forEach(building => {
+      if (collisionHandled) return; // Skip if a collision was already handled
+  
       if (
         this.ballX + 10 * this.scale > building.x &&
         this.ballX - 10 * this.scale < building.x + building.width &&
         this.ballY + 10 * this.scale > building.y &&
         this.ballY - 10 * this.scale < building.y + building.height
       ) {
-        // Determines which side of the building the ball hit
+        // Store the current speed magnitudes
+        const speedXMag = Math.abs(this.isSpeedBoosted ? this.boostedSpeedX : this.ballSpeedX);
+        const speedYMag = Math.abs(this.isSpeedBoosted ? this.boostedSpeedY : this.ballSpeedY);
+  
+        // Determine which side of the building the ball hit
         const ballLeft = this.ballX - 10 * this.scale;
         const ballRight = this.ballX + 10 * this.scale;
         const ballTop = this.ballY - 10 * this.scale;
         const ballBottom = this.ballY + 10 * this.scale;
-
+  
         const leftDiff = Math.abs(ballRight - building.x);
         const rightDiff = Math.abs(ballLeft - (building.x + building.width));
         const topDiff = Math.abs(ballBottom - building.y);
         const bottomDiff = Math.abs(ballTop - (building.y + building.height));
-
+  
         const minDiff = Math.min(leftDiff, rightDiff, topDiff, bottomDiff);
-
-        // Reposition ball to prevent sticking
+  
+        // Reposition ball and reverse direction while preserving speed magnitude
         if (minDiff === leftDiff) {
           this.ballX = building.x - 10 * this.scale; // Move left of building
-          this.ballSpeedX = -Math.abs(this.ballSpeedX); // Ensure moving left
+          this.ballSpeedX = -speedXMag; // Reverse X direction, preserve magnitude
+          if (this.isSpeedBoosted) this.boostedSpeedX = -speedXMag;
         } else if (minDiff === rightDiff) {
           this.ballX = building.x + building.width + 10 * this.scale; // Move right of building
-          this.ballSpeedX = Math.abs(this.ballSpeedX); // Ensure moving right
+          this.ballSpeedX = speedXMag; // Reverse X direction, preserve magnitude
+          if (this.isSpeedBoosted) this.boostedSpeedX = speedXMag;
         } else if (minDiff === topDiff) {
           this.ballY = building.y - 10 * this.scale; // Move above building
-          this.ballSpeedY = -Math.abs(this.ballSpeedY); // Ensure moving up
+          this.ballSpeedY = -speedYMag; // Reverse Y direction, preserve magnitude
+          if (this.isSpeedBoosted) this.boostedSpeedY = -speedYMag;
         } else if (minDiff === bottomDiff) {
           this.ballY = building.y + building.height + 10 * this.scale; // Move below building
-          this.ballSpeedY = Math.abs(this.ballSpeedY); // Ensure moving down
+          this.ballSpeedY = speedYMag; // Reverse Y direction, preserve magnitude
+          if (this.isSpeedBoosted) this.boostedSpeedY = speedYMag;
         }
+  
+        collisionHandled = true; // Mark collision as handled
       }
     });
   }
 
   // Sets up event listeners for game controls and settings
-  protected setupEventListeners() {
+  protected setupEventListeners(): void {
     super.setupEventListeners();
-
-    // Add additional listener for background color change to update the neon background
+  
+    // Add listener for background color change
     if (this.backgroundColorSelect) {
-      this.backgroundColorSelect.addEventListener("change", () => {
-        console.log("Background color changed to:", this.backgroundColorSelect!.value);
+      this.backgroundColor = this.backgroundColorSelect.value || "#d8a8b5";
+      this.initBackgroundCanvas();
+      this.backgroundColorSelect.addEventListener("change", (e) => {
+        this.backgroundColor = (e.target as HTMLSelectElement).value;
+        console.log("Background color changed to:", this.backgroundColor);
+        if (this.userEmail) {
+          this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+        }
         this.initBackgroundCanvas();
+        // Removed this.draw() to prevent speed increase; animation loop will handle rendering
       });
     } else {
-      console.warn("Background color select element not found");
+      console.warn(`Background color select element not found with ID "${this.backgroundColorSelectId}". Using default color #d8a8b5.`);
+      this.backgroundColor = "#d8a8b5";
+      this.initBackgroundCanvas();
     }
   }
 
@@ -503,62 +547,31 @@ export class NeonCityPong extends PongGame {
       // Bounce ball off top and bottom walls
       if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
         this.ballSpeedY = -this.ballSpeedY;
+        if (this.isSpeedBoosted) this.boostedSpeedY = -this.boostedSpeedY;
       }
 
       // Handle ball collision with left paddle
       if (
-        this.ballX - 10 * this.scale >= 10 * this.scale &&
         this.ballX - 10 * this.scale <= 30 * this.scale &&
-        this.ballY >= this.paddleLeftY &&
-        this.ballY <= this.paddleLeftY + this.paddleLeftHeight
-      ) {
-        this.ballSpeedX = -this.ballSpeedX;
-      } else if (
         this.ballX + 10 * this.scale >= 10 * this.scale &&
-        this.ballX + 10 * this.scale <= 30 * this.scale &&
         this.ballY >= this.paddleLeftY &&
         this.ballY <= this.paddleLeftY + this.paddleLeftHeight
       ) {
         this.ballSpeedX = -this.ballSpeedX;
-      } else if (
-        this.ballX >= 10 * this.scale &&
-        this.ballX <= 30 * this.scale &&
-        (this.ballY - 10 * this.scale <= this.paddleLeftY + this.paddleLeftHeight && this.ballY + 10 * this.scale >= this.paddleLeftY)
-      ) {
-        this.ballSpeedY = -this.ballSpeedY;
-        if (this.ballY < this.paddleLeftY + this.paddleLeftHeight / 2) {
-          this.ballY = this.paddleLeftY - 10 * this.scale; // Place above paddle
-        } else {
-          this.ballY = this.paddleLeftY + this.paddleLeftHeight + 10 * this.scale; // Place below paddle
-        }
+        if (this.isSpeedBoosted) this.boostedSpeedX = -this.boostedSpeedX;
+        this.ballX = 30 * this.scale + 10 * this.scale; // Place right of paddle
       }
 
       // Handle ball collision with right paddle
       if (
         this.ballX + 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
-        this.ballX + 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
-        this.ballY >= this.paddleRightY &&
-        this.ballY <= this.paddleRightY + this.paddleRightHeight
-      ) {
-        this.ballSpeedX = -this.ballSpeedX;
-      } else if (
-        this.ballX - 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
         this.ballX - 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
         this.ballY >= this.paddleRightY &&
         this.ballY <= this.paddleRightY + this.paddleRightHeight
       ) {
         this.ballSpeedX = -this.ballSpeedX;
-      } else if (
-        this.ballX >= (this.baseWidth - 30) * this.scale &&
-        this.ballX <= (this.baseWidth - 10) * this.scale &&
-        (this.ballY - 10 * this.scale <= this.paddleRightY + this.paddleRightHeight && this.ballY + 10 * this.scale >= this.paddleRightY)
-      ) {
-        this.ballSpeedY = -this.ballSpeedY;
-        if (this.ballY < this.paddleRightY + this.paddleRightHeight / 2) {
-          this.ballY = this.paddleRightY - 10 * this.scale; // Place above paddle
-        } else {
-          this.ballY = this.paddleRightY + this.paddleRightHeight + 10 * this.scale; // Place below paddle
-        }
+        if (this.isSpeedBoosted) this.boostedSpeedX = -this.boostedSpeedX;
+        this.ballX = (this.baseWidth - 30) * this.scale - 10 * this.scale; // Place left of paddle
       }
 
       // Check for ball collisions with buildings
@@ -578,8 +591,10 @@ export class NeonCityPong extends PongGame {
         this.scoreRightElement.textContent = this.scoreRight.toString();
         if (this.scoreRight >= 3) {
           this.gameOver = true;
+          this.powerUps = []; // Clear all power-ups
           this.restartButton.style.display = "block";
-          this.backButton.style.display = "block";
+          const backButton = document.getElementById("backButton") as HTMLButtonElement;
+          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -590,8 +605,15 @@ export class NeonCityPong extends PongGame {
         } else {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
-          this.ballSpeedX = parseInt(this.speedSlider.value) * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
-          this.ballSpeedY = parseInt(this.speedSlider.value) * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale;
+          // Reset ball speed with slider value
+          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
+          this.ballSpeedX = 2.5 * this.scale * speedMultiplier; // Move right (positive)
+          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Random Y direction
+          this.isSpeedBoosted = false; // Reset speed boost
+          this.boostedSpeedX = 0;
+          this.boostedSpeedY = 0;
+          this.leftSpeedBoostActive = false;
+          this.rightSpeedBoostActive = false;
           this.paddleLeftHeight = 80 * this.scale;
           this.paddleRightHeight = 80 * this.scale;
         }
@@ -600,8 +622,10 @@ export class NeonCityPong extends PongGame {
         this.scoreLeftElement.textContent = this.scoreLeft.toString();
         if (this.scoreLeft >= 3) {
           this.gameOver = true;
+          this.powerUps = []; // Clear all power-ups
           this.restartButton.style.display = "block";
-          this.backButton.style.display = "block";
+          const backButton = document.getElementById("backButton") as HTMLButtonElement;
+          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -612,8 +636,15 @@ export class NeonCityPong extends PongGame {
         } else {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
-          this.ballSpeedX = parseInt(this.speedSlider.value) * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
-          this.ballSpeedY = parseInt(this.speedSlider.value) * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale;
+          // Reset ball speed with slider value
+          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
+          this.ballSpeedX = -2.5 * this.scale * speedMultiplier; // Move left (negative)
+          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Random Y direction
+          this.isSpeedBoosted = false; // Reset speed boost
+          this.boostedSpeedX = 0;
+          this.boostedSpeedY = 0;
+          this.leftSpeedBoostActive = false;
+          this.rightSpeedBoostActive = false;
           this.paddleLeftHeight = 80 * this.scale;
           this.paddleRightHeight = 80 * this.scale;
         }
@@ -646,7 +677,7 @@ export class NeonCityPong extends PongGame {
       this.ctx.shadowBlur = 0;
     }
 
-    // Continue the animation loop
-    this.animationFrameId = requestAnimationFrame(this.draw);
+    // Continue the animation loop with proper binding
+    this.animationFrameId = requestAnimationFrame(this.draw.bind(this));
   }
 }

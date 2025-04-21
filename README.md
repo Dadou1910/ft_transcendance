@@ -4,16 +4,101 @@
 
 ---
 
-## ✅ Fonctionnalités obligatoires
+## Completed modules : 2.5
 
-- [x] 🎯 **SPA (Single Page Application)** avec TailwindCSS + TypeScript
-- [x] 🕹️ **Pong local** (2 joueurs sur le même clavier)
-- [x] 🧩 **Tournoi avec matchmaking**
-- [x] 🧑‍🎤 **Alias joueur unique par tournoi**
-- [x] 🐳 **Lancement via une seule commande Docker**
-- [x] 🔒 **Connexion HTTPS + mots de passe hashés**
-- [ ] 🛡️ **Protection contre les attaques XSS/SQLi + validation des entrées**
-- [x] 🧪 **Aucune erreur JS dans Firefox dernière version**
+## ✅ Mandatory Part
+
+  # Single Page Application with TypeScript
+- [x] Website must be a single-page application
+- [x] User can use Back and Forward buttons of the browser
+- [x] Frontend developed using TypeScript as base code
+
+  # Local Pong game (2 players on the same keyboard)
+- [x] Users can participate in a live Pong game against another player on the same keyboard
+- [x] Game captures the essence of the original Pong (1972)
+- [x] Players adhere to the same rules, including identical paddle speed
+
+  # Tournament system with matchmaking
+- [x] Tournament system allows multiple players to take turns playing against each other
+- [x] Clear display of who is playing against whom and the order of play
+- [x] Matchmaking system organizes participants and announces the next match
+- [x] Unique player alias per tournament
+- [x] Registration system requires each player to input their alias at the start of a tournament
+- [x] Aliases reset when a new tournament begins
+
+  # Launch via a single Docker command
+- [x] Use Docker to run the website
+- [x] Everything launched with a single command line to run an autonomous container
+- [ ] Runtime located in /goinfre or /sgoinfre (not verifiable from code alone)
+- [ ] No use of bind-mount volumes if non-root UIDs are used (not verifiable from code alone)
+
+  # HTTPS connection
+- [x] Enable HTTPS connection for all aspects (e.g., use wss instead of ws)
+- [ ] Passwords hashed in the database
+- [ ] Any password stored in the database must be hashed
+- [ ] Use a strong password hashing algorithm
+- [ ] Credentials, API keys, env variables saved locally in a .env file and ignored by git
+
+  # No unhandled JavaScript errors in the latest Mozilla Firefox version
+- [x] Website compatible with the latest stable version of Mozilla Firefox
+- [x] User encounters no unhandled errors or warnings when browsing
+
+  # Protection against XSS/SQL injection attacks
+- [ ] Website protected against SQL injections/XSS attacks
+- [ ] Input validation for forms and user inputs
+
+## ✅ Web Module
+
+  # Backend framework: Fastify with Node.js
+- [x] Use Fastify with Node.js for backend development
+- [x] Backend developed without using pure PHP (overriding mandatory part constraint)
+
+  # Frontend framework: TailwindCSS with TypeScript
+- [x] Use TailwindCSS in addition to TypeScript for frontend development
+- [x] Frontend developed adhering to SPA requirements
+
+  # Database: SQLite
+- [ ] Use SQLite for all database instances
+- [ ] Ensure data consistency and compatibility across project components
+
+## ✅ Gameplay and User Experience Module
+
+  # Game customization options
+- [x] Provide customization options for all available games (e.g., power-ups, different maps)
+- [x] Allow users to choose a default version of the game with basic features
+- [x] Ensure customization options are applicable to all games
+- [x] Implement user-friendly settings menus or interfaces for adjusting game parameters
+- [x] Maintain consistency in customization features across all games
+
+## ✅ Accessibility Module
+
+  # Support on all devices (responsive design)
+- [x] Website is responsive, adapting to different screen sizes and orientations
+- [x] Consistent user experience on desktops, laptops, tablets, and smartphones
+- [x] Users can navigate and interact using different input methods (touchscreens, keyboards, mice)
+
+  # Expanding browser compatibility
+- [ ] Extend browser support to include an additional web browser
+- [ ] Conduct thorough testing and optimization for the newly supported browser
+- [ ] Ensure consistent user experience across all supported browsers
+- [ ] Address compatibility issues or rendering discrepancies
+
+  # Multiple language support
+- [ ] Implement support for a minimum of three languages
+- [ ] Provide a language switcher or selector
+- [ ] Translate essential website content (navigation menus, headings, key information)
+- [ ] Ensure seamless navigation and interaction regardless of selected language
+- [ ] Use language packs or localization libraries
+- [ ] Allow users to set preferred language as default
+
+  # Add accessibility for visually impaired users
+- [ ] Support for screen readers and assistive technologies (no ARIA attributes or screen reader support in code)
+- [ ] Clear and descriptive alt text for images (no alt text implemented)
+- [ ] High-contrast color scheme for readability (TailwindCSS colors used but not optimized for high contrast)
+- [ ] Keyboard navigation and focus management (partial keyboard support for game controls, but no focus management)
+- [ ] Options for adjusting text size
+- [ ] Regular updates to meet accessibility standards
+
 
 ---
 
