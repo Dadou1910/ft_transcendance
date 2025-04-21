@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "80:80"
+      - "5173:80"
     restart: unless-stopped
   backend:
     build:
