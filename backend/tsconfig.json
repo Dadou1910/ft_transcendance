@@ -1,18 +1,18 @@
 {
-    "compilerOptions": {
-      "target": "ESNext",
-      "module": "NodeNext",
-      "moduleResolution": "NodeNext",
-      "outDir": "./dist",
-      "rootDir": "./src",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true
-    },
-    "include": ["src/**/*"],
-       "include": [
-           "src/**/*",
-           "src/types/**/*.d.ts"   // ← on inclut nos déclarations
-         ],
-    "exclude": ["node_modules"]
-  }
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types"
+    ]
+  },
+  "include": ["src", "src/types"],
+  "exclude": ["node_modules"]
+}
