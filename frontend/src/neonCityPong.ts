@@ -1,5 +1,5 @@
-import { PongGame } from "./game.js";
-import { StatsManager } from "./stats.js";
+import { PongGame } from "./game";
+import { StatsManager } from "./stats";
 
 // Defines interfaces for buildings and power-ups used in the game
 interface Building {
@@ -41,7 +41,7 @@ export class NeonCityPong extends PongGame {
   private backgroundCanvas: HTMLCanvasElement | null = null;
   private backgroundCtx: CanvasRenderingContext2D | null = null;
   // Reference to background color select element
-  protected backgroundColorSelect: HTMLSelectElement | null = null;
+  private backgroundColorSelect: HTMLSelectElement | null = null;
   // Static background image
   private backgroundImage: HTMLImageElement | null = null;
 
@@ -125,6 +125,17 @@ export class NeonCityPong extends PongGame {
       console.error("Button container not found, appending buttons to body instead");
       document.body.appendChild(this.backButton);
       document.body.appendChild(this.restartButton);
+    }
+
+    // Initialize background color select element
+    this.backgroundColorSelect = document.getElementById(backgroundColorSelectId) as HTMLSelectElement;
+    if (this.backgroundColorSelect) {
+      this.backgroundColorSelect.addEventListener("change", () => {
+        console.log("Background color changed to:", this.backgroundColorSelect!.value);
+        this.initBackgroundCanvas();
+      });
+    } else {
+      console.warn("Background color select element not found");
     }
 
     // Initialize background image
@@ -240,6 +251,9 @@ export class NeonCityPong extends PongGame {
     }
     if (this.backButton) {
       this.backButton.remove();
+    }
+    if (this.backgroundColorSelect) {
+      this.backgroundColorSelect.removeEventListener("change", () => this.initBackgroundCanvas());
     }
     window.removeEventListener("resize", () => {
       this.resizeCanvas();
@@ -446,17 +460,71 @@ export class NeonCityPong extends PongGame {
 
   // Sets up event listeners for game controls and settings
   protected setupEventListeners() {
-    super.setupEventListeners();
+    // Adjust ball speed based on slider input
+    this.speedSlider.addEventListener("input", (e) => {
+      const speed = parseInt((e.target as HTMLInputElement).value);
+      this.ballSpeedX = speed * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
+      this.ballSpeedY = (speed * this.ballSpeedY) / Math.abs(this.ballSpeedX) * this.scale;
+      if (this.userEmail) {
+        this.statsManager.setUserSettings(this.userEmail, { ballSpeed: speed });
+      }
+    });
 
-    // Add additional listener for background color change to update the neon background
-    if (this.backgroundColorSelect) {
-      this.backgroundColorSelect.addEventListener("change", () => {
-        console.log("Background color changed to:", this.backgroundColorSelect!.value);
-        this.initBackgroundCanvas();
-      });
-    } else {
-      console.warn("Background color select element not found");
-    }
+    // Update background color based on selection
+    this.backgroundColorSelect.addEventListener("change", (e) => {
+      this.backgroundColor = (e.target as HTMLSelectElement).value;
+      if (this.userEmail) {
+        this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+      }
+    });
+
+    // Toggle settings menu visibility
+    this.settingsButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.settingsMenu.classList.toggle("visible");
+    });
+
+    // Close settings menu when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!this.settingsContainer.contains(e.target as Node)) {
+        this.settingsMenu.classList.remove("visible");
+      }
+    });
+
+    // Handle game start/restart
+    this.restartButton.addEventListener("click", () => {
+      if (!this.gameStarted) {
+        this.gameStarted = true;
+        this.restartButton.style.display = "none";
+      } else {
+        this.scoreLeft = 0;
+        this.scoreRight = 0;
+        this.scoreLeftElement.textContent = "0";
+        this.scoreRightElement.textContent = "0";
+        this.gameOver = false;
+        this.ballX = (this.baseWidth / 2) * this.scale;
+        this.ballY = (this.baseHeight / 2) * this.scale;
+        this.ballSpeedX = parseInt(this.speedSlider.value) * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
+        this.ballSpeedY = parseInt(this.speedSlider.value) * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale;
+        this.restartButton.style.display = "none";
+      }
+    });
+
+    // Handle keyboard controls
+    document.addEventListener("keydown", (e) => {
+      if (e.key === " " && this.gameStarted) {
+        this.isPaused = !this.isPaused;
+      }
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        this.keys[e.key as "w" | "s" | "ArrowUp" | "ArrowDown"] = true;
+      }
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        this.keys[e.key as "w" | "s" | "ArrowUp" | "ArrowDown"] = false;
+      }
+    });
   }
 
   // Main draw loop for rendering the game
