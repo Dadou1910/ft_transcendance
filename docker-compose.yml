@@ -1,13 +1,38 @@
+version: '3.8'
+
 services:
-  frontend:
-    build:
-      context: ./frontend
+  sqlite:
+    image: nouchka/sqlite3
+    container_name: sqlite
+    volumes:
+      - sqlite_data:/data
+      - ./sqlite/init.sh:/init.sh
+    entrypoint: ["sh", "/init.sh"]
+
+  fastify:
+    build: ./fastify
+    container_name: fastify
+    volumes:
+      - sqlite_data:/data
+    depends_on:
+      - sqlite
+    networks:
+      - webnet
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
     ports:
-      - "80:80"
-    restart: unless-stopped
-  backend:
-    build:
-      context: ./backend
-    ports:
-      - "3000:3000"
-    restart: unless-stopped
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - fastify
+    networks:
+      - webnet
+
+volumes:
+  sqlite_data:
+
+networks:
+  webnet:
