@@ -2,6 +2,7 @@
 
 import { FastifyPluginAsync } from 'fastify';
 
+
 // 1) On définit l'API de la base SQLite telle qu'exposée par fastify-sqlite
 export interface SqliteDb {
   run(sql: string, ...args: any[]): Promise<{ lastID: number; changes: number }>;
