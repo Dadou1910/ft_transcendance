@@ -25,6 +25,8 @@ import { PongGame } from "./game.js";
 import { NeonCityPong } from "./neonCityPong.js";
 // Imports AI Pong class for AI opponent mode
 import { AIPong } from "./AIPong.js";
+// Imports SpaceBattle class for the space-themed game mode
+import { SpaceBattle } from "./spaceBattle.js";
 // Imports Bracket class for tournament bracket management
 import { Bracket } from "./bracket.js";
 // Imports StatsManager and Player type for player statistics
@@ -38,8 +40,8 @@ const tournamentId = uuidv4();
 const tournament = new Tournament(statsManager, tournamentId);
 // Initializes Router with the app container ID and route listener setup
 const router = new Router("app", setupRouteListeners);
-// Stores the current game instance (PongGame, NeonCityPong, or AIPong)
-let gameInstance: PongGame | null = null;
+// Stores the current game instance (PongGame, NeonCityPong, AIPong, or SpaceBattle)
+let gameInstance: PongGame | SpaceBattle | null = null;
 // Stores the current tournament bracket instance
 let bracketInstance: Bracket | null = null;
 // Tracks whether the game is in tournament mode
@@ -51,7 +53,6 @@ const navigate = (path: string) => router.navigate(path);
 // Defines root route ("/")
 router.addRoute("/", () => {
   const currentUser = statsManager.getCurrentUser();
-  // Renders logged-in welcome page if user is authenticated
   if (currentUser) {
     console.log("Rendering logged-in welcome page for:", currentUser.username);
     return renderLoggedInWelcomePage(
@@ -60,7 +61,6 @@ router.addRoute("/", () => {
       currentUser.avatarUrl
     );
   }
-  // Renders pre-login welcome page otherwise
   console.log("Rendering pre-login welcome page");
   return renderWelcomePage(
     () => router.navigate("/register"),
@@ -71,7 +71,6 @@ router.addRoute("/", () => {
 // Defines welcome route ("/welcome")
 router.addRoute("/welcome", () => {
   const currentUser = statsManager.getCurrentUser();
-  // Renders logged-in welcome page if user is authenticated
   if (currentUser) {
     console.log("Rendering logged-in welcome page for:", currentUser.username);
     return renderLoggedInWelcomePage(
@@ -80,7 +79,6 @@ router.addRoute("/welcome", () => {
       currentUser.avatarUrl
     );
   }
-  // Redirects to root if no user is logged in
   console.log("Redirecting to / as no user is logged in");
   router.navigate("/");
   return "";
@@ -89,15 +87,12 @@ router.addRoute("/welcome", () => {
 // Defines registration route ("/register")
 router.addRoute("/register", () => {
   console.log("Rendering /register route");
-  // Renders registration form with submit handler
   return renderRegistrationForm((username, email, password, avatar) => {
     console.log("Register onSubmit called");
-    // Checks if username is already taken
     if (statsManager.hasUser(username)) {
       alert("Username already exists. Please choose another.");
       return;
     }
-    // Adds new user to stats manager
     statsManager.addUser(username, email, password, avatar);
     console.log("Navigating to /");
     router.navigate("/");
@@ -107,13 +102,11 @@ router.addRoute("/register", () => {
 // Defines login route ("/login")
 router.addRoute("/login", () => {
   console.log("Rendering /login route");
-  // Renders login form with submit and register navigation handlers
   return renderLoginForm(
     (email, password) => {
       console.log("Login onSubmit called with:", { email });
       const user = statsManager.getUserByEmail(email);
       console.log("Found user:", user ? user.email : "none");
-      // Validates credentials and sets current user
       if (user && user.password === password) {
         console.log("Credentials valid, setting current user");
         statsManager.setCurrentUser(email);
@@ -327,17 +320,13 @@ router.addRoute("/neonCityGame", () => {
 
 // Defines AI game route ("/aiGame")
 router.addRoute("/aiGame", () => {
-  // Redirects to root if no players are in the tournament
   if (!tournament.hasPlayers()) {
     router.navigate("/");
     return "";
   }
-  // Uses default players for non-tournament mode (AI is always non-tournament)
   const [left] = tournament.getPlayers();
   const right = "AI Opponent";
-  // Renders game view
   const html = renderGameView(left, right);
-  // Initializes AIPong instance
   setTimeout(() => {
     gameInstance = new AIPong(
       left,
@@ -353,9 +342,88 @@ router.addRoute("/aiGame", () => {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.email || null,
-      undefined, // No onGameEnd callback since not in tournament
+      undefined,
       navigate
     );
+    // No need to call resizeCanvas or start; handled in constructor
+  }, 0);
+  return html;
+});
+
+// Defines space battle game route ("/spaceBattleGame")
+router.addRoute("/spaceBattleGame", () => {
+  if (!tournament.hasPlayers()) {
+    router.navigate("/");
+    return "";
+  }
+  let left: string, right: string;
+  if (isTournamentMode && bracketInstance) {
+    const match = bracketInstance.getNextMatch();
+    if (!match) {
+      const winnerId = bracketInstance.getWinner();
+      if (winnerId) {
+        const winner = bracketInstance.getRounds().flat().find(m => m.player1.id === winnerId || m.player2.id === winnerId);
+        if (winner) {
+          const winnerName = winner.player1.id === winnerId ? winner.player1.name : winner.player2.name;
+          statsManager.recordTournamentWin(winnerName);
+          const currentPlayers = tournament.getPlayers();
+          isTournamentMode = false;
+          bracketInstance = null;
+          tournament.clearPlayers();
+          const html = renderTournamentEnd(winnerName);
+          setTimeout(() => {
+            setupTournamentEnd(
+              () => {
+                tournament.addPlayers(currentPlayers);
+                const players: Player[] = currentPlayers.map(name => ({ id: uuidv4(), name }));
+                bracketInstance = new Bracket(players, statsManager, tournamentId);
+                isTournamentMode = true;
+                router.navigate("/spaceBattleGame");
+              },
+              () => {
+                router.navigate("/");
+              }
+            );
+          }, 0);
+          return html;
+        }
+      }
+      return "";
+    }
+    left = match.player1.name;
+    right = match.player2.name;
+  } else {
+    [left, right] = tournament.getPlayers();
+  }
+  const html = renderGameView(left, right, isTournamentMode ? bracketInstance?.getCurrentRound() : undefined);
+  setTimeout(() => {
+    gameInstance = new SpaceBattle(
+      left,
+      right,
+      "pongCanvas",
+      "speedSlider",
+      "backgroundColorSelect",
+      "scoreLeft",
+      "scoreRight",
+      "restartButton",
+      "settingsButton",
+      "settingsMenu",
+      "settingsContainer",
+      statsManager,
+      statsManager.getCurrentUser()?.email || null,
+      navigate,
+      isTournamentMode ? (winnerName: string) => {
+        if (bracketInstance) {
+          const match = bracketInstance.getNextMatch();
+          if (match) {
+            const winnerId = match.player1.name === winnerName ? match.player1.id : match.player2.id;
+            bracketInstance.setMatchWinner(match.id, winnerId);
+            router.navigate("/spaceBattleGame");
+          }
+        }
+      } : undefined
+    );
+    // No need to call resizeCanvas or start; handled in constructor
   }, 0);
   return html;
 });
@@ -366,10 +434,8 @@ router.start();
 // Sets up event listeners for each route
 function setupRouteListeners() {
   console.log("Setting up route listeners for pathname:", window.location.pathname);
-  // Handles root and welcome routes
   if (window.location.pathname === "/" || window.location.pathname === "/welcome") {
     const currentUser = statsManager.getCurrentUser();
-    // Sets up logged-in welcome page
     if (currentUser) {
       console.log("Setting up logged-in welcome page");
       setupLoggedInWelcomePage(
@@ -386,13 +452,14 @@ function setupRouteListeners() {
             const selectedMode = gameModeSelect.value;
             tournament.addPlayers([currentUser.username, "Player 2"]);
             isTournamentMode = false;
-            // Navigates to appropriate game mode
             if (selectedMode === "standard") {
               router.navigate("/game");
             } else if (selectedMode === "neonCity") {
               router.navigate("/neonCityGame");
             } else if (selectedMode === "ai") {
               router.navigate("/aiGame");
+            } else if (selectedMode === "spaceBattle") {
+              router.navigate("/spaceBattleGame");
             }
           } else {
             console.error("gameModeSelect not found!");
@@ -405,7 +472,6 @@ function setupRouteListeners() {
         }
       );
     } else {
-      // Sets up pre-login welcome page
       console.log("Setting up pre-login welcome page");
       setupWelcomePage(
         () => router.navigate("/register"),
@@ -413,7 +479,6 @@ function setupRouteListeners() {
       );
     }
   } else if (window.location.pathname === "/register") {
-    // Sets up registration form
     console.log("Setting up registration form");
     setupRegistrationForm((username, email, password, avatar) => {
       console.log("Registration form submitted");
@@ -426,7 +491,6 @@ function setupRouteListeners() {
       router.navigate("/");
     });
   } else if (window.location.pathname === "/login") {
-    // Sets up login form
     console.log("Setting up login form");
     setupLoginForm(
       (email, password) => {
@@ -450,7 +514,6 @@ function setupRouteListeners() {
       }
     );
   } else if (window.location.pathname === "/tournament") {
-    // Sets up tournament form or redirects to game
     if (tournament.hasPlayers() && isTournamentMode) {
       router.navigate("/game");
     } else {

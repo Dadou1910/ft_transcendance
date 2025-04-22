@@ -19,6 +19,7 @@ interface PowerUp {
   side: "left" | "right";
 }
 
+
 // Extends the base PongGame class to create a neon-themed version with additional features
 export class NeonCityPong extends PongGame {
   // Array to store building objects for the background
@@ -153,8 +154,6 @@ export class NeonCityPong extends PongGame {
       this.resizeCanvas();
       this.initBackgroundCanvas();
     });
-    // this Wrote a comment for clarity
-    // this.startAnimation();
   }
 
   // Initializes the offscreen background canvas
@@ -200,9 +199,9 @@ export class NeonCityPong extends PongGame {
     this.paddleLeftY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleRightY = (this.baseHeight / 2 - 40) * this.scale;
     // Initialize ball speed with slider value
-    const speedMultiplier = parseInt(this.speedSlider.value) / 10; // Reduced for finer control
-    this.ballSpeedX = 1.5 * this.scale * speedMultiplier; // Reduced base speed
-    this.ballSpeedY = 0.9 * this.scale * speedMultiplier; // Reduced base speed
+    const speedMultiplier = this.getSpeedMultiplier();
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier;
     this.isSpeedBoosted = false; // Reset speed boost
     this.boostedSpeedX = 0;
     this.boostedSpeedY = 0;
@@ -325,94 +324,95 @@ export class NeonCityPong extends PongGame {
   }
 
   // Checks for collisions between power-ups and paddles
-  private checkPowerUpCollision(): void {
-    if (!this.powerUps) {
-      console.warn("powerUps array is undefined, reinitializing...");
-      this.powerUps = [];
-    }
-    this.powerUps.forEach(powerUp => {
-      if (!powerUp.active) return;
-
-      // Calculate base speed from slider for max speed cap
-      const speedMultiplier = parseInt(this.speedSlider.value) / 10;
-      const baseSpeedX = 1.5 * this.scale * speedMultiplier;
-      const baseSpeedY = 0.9 * this.scale * speedMultiplier;
-      const maxSpeedX = baseSpeedX * this.MAX_SPEED_INCREASE;
-      const maxSpeedY = baseSpeedY * this.MAX_SPEED_INCREASE;
-
-      // Defines left paddle boundaries
-      const leftPaddle = {
-        x: 10 * this.scale,
-        y: this.paddleLeftY,
-        width: 20 * this.scale,
-        height: this.paddleLeftHeight,
-      };
-      // Checks collision with left paddle
-      if (
-        powerUp.x + 10 * this.scale > leftPaddle.x &&
-        powerUp.x - 10 * this.scale < leftPaddle.x + leftPaddle.width &&
-        powerUp.y + 10 * this.scale > leftPaddle.y &&
-        powerUp.y - 10 * this.scale < leftPaddle.y + leftPaddle.height
-      ) {
-        powerUp.active = false;
-        if (powerUp.type === "speedBoost") {
-          // Apply speed boost with cap
-          this.isSpeedBoosted = true;
-          this.boostedSpeedX = Math.min(this.ballSpeedX * 1.5, maxSpeedX * Math.sign(this.ballSpeedX));
-          this.boostedSpeedY = Math.min(this.ballSpeedY * 1.5, maxSpeedY * Math.sign(this.ballSpeedY));
-          this.ballSpeedX = this.boostedSpeedX;
-          this.ballSpeedY = this.boostedSpeedY;
-          this.leftSpeedBoostActive = true;
-          console.log(`Speed Boost activated for left paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
-        } else if (powerUp.type === "paddleExtend") {
-          this.paddleLeftHeight = 120 * this.scale;
-          this.leftPaddleExtendActive = true;
-          console.log("Left paddle extended!");
-          setTimeout(() => {
-            this.paddleLeftHeight = 80 * this.scale;
-            this.leftPaddleExtendActive = false;
-            console.log("Left paddle reverted to normal size");
-          }, 5000);
-        }
-      }
-
-      // Defines right paddle boundaries
-      const rightPaddle = {
-        x: (this.baseWidth - 30) * this.scale,
-        y: this.paddleRightY,
-        width: 20 * this.scale,
-        height: this.paddleRightHeight,
-      };
-      // Checks collision with right paddle
-      if (
-        powerUp.x + 10 * this.scale > rightPaddle.x &&
-        powerUp.x - 10 * this.scale < rightPaddle.x + rightPaddle.width &&
-        powerUp.y + 10 * this.scale > rightPaddle.y &&
-        powerUp.y - 10 * this.scale < rightPaddle.y + rightPaddle.height
-      ) {
-        powerUp.active = false;
-        if (powerUp.type === "speedBoost") {
-          // Apply speed boost with cap
-          this.isSpeedBoosted = true;
-          this.boostedSpeedX = Math.min(this.ballSpeedX * 1.5, maxSpeedX * Math.sign(this.ballSpeedX));
-          this.boostedSpeedY = Math.min(this.ballSpeedY * 1.5, maxSpeedY * Math.sign(this.ballSpeedY));
-          this.ballSpeedX = this.boostedSpeedX;
-          this.ballSpeedY = this.boostedSpeedY;
-          this.rightSpeedBoostActive = true;
-          console.log(`Speed Boost activated for right paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
-        } else if (powerUp.type === "paddleExtend") {
-          this.paddleRightHeight = 120 * this.scale;
-          this.rightPaddleExtendActive = true;
-          console.log("Right paddle extended!");
-          setTimeout(() => {
-            this.paddleRightHeight = 80 * this.scale;
-            this.rightPaddleExtendActive = false;
-            console.log("Right paddle reverted to normal size");
-          }, 5000);
-        }
-      }
-    });
+  // Checks for collisions between power-ups and paddles
+private checkPowerUpCollision(): void {
+  if (!this.powerUps) {
+    console.warn("powerUps array is undefined, reinitializing...");
+    this.powerUps = [];
   }
+  this.powerUps.forEach(powerUp => {
+    if (!powerUp.active) return;
+
+    // Calculate base speed from slider for max speed cap
+    const speedMultiplier = this.getSpeedMultiplier(); // Use standard multiplier (/ 5)
+    const baseSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+    const baseSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier;
+    const maxSpeedX = baseSpeedX * this.MAX_SPEED_INCREASE;
+    const maxSpeedY = baseSpeedY * this.MAX_SPEED_INCREASE;
+
+    // Defines left paddle boundaries
+    const leftPaddle = {
+      x: 10 * this.scale,
+      y: this.paddleLeftY,
+      width: 20 * this.scale,
+      height: this.paddleLeftHeight,
+    };
+    // Checks collision with left paddle
+    if (
+      powerUp.x + 10 * this.scale > leftPaddle.x &&
+      powerUp.x - 10 * this.scale < leftPaddle.x + leftPaddle.width &&
+      powerUp.y + 10 * this.scale > leftPaddle.y &&
+      powerUp.y - 10 * this.scale < leftPaddle.y + leftPaddle.height
+    ) {
+      powerUp.active = false;
+      if (powerUp.type === "speedBoost") {
+        // Apply speed boost based on current speed with cap
+        this.isSpeedBoosted = true;
+        this.boostedSpeedX = Math.min(Math.abs(this.ballSpeedX) * 1.5, maxSpeedX) * Math.sign(this.ballSpeedX);
+        this.boostedSpeedY = Math.min(Math.abs(this.ballSpeedY) * 1.5, maxSpeedY) * Math.sign(this.ballSpeedY);
+        this.ballSpeedX = this.boostedSpeedX;
+        this.ballSpeedY = this.boostedSpeedY;
+        this.leftSpeedBoostActive = true;
+        console.log(`Speed Boost activated for left paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
+      } else if (powerUp.type === "paddleExtend") {
+        this.paddleLeftHeight = 120 * this.scale;
+        this.leftPaddleExtendActive = true;
+        console.log("Left paddle extended!");
+        setTimeout(() => {
+          this.paddleLeftHeight = 80 * this.scale;
+          this.leftPaddleExtendActive = false;
+          console.log("Left paddle reverted to normal size");
+        }, 5000);
+      }
+    }
+
+    // Defines right paddle boundaries
+    const rightPaddle = {
+      x: (this.baseWidth - 30) * this.scale,
+      y: this.paddleRightY,
+      width: 20 * this.scale,
+      height: this.paddleRightHeight,
+    };
+    // Checks collision with right paddle
+    if (
+      powerUp.x + 10 * this.scale > rightPaddle.x &&
+      powerUp.x - 10 * this.scale < rightPaddle.x + rightPaddle.width &&
+      powerUp.y + 10 * this.scale > rightPaddle.y &&
+      powerUp.y - 10 * this.scale < rightPaddle.y + rightPaddle.height
+    ) {
+      powerUp.active = false;
+      if (powerUp.type === "speedBoost") {
+        // Apply speed boost based on current speed with cap
+        this.isSpeedBoosted = true;
+        this.boostedSpeedX = Math.min(Math.abs(this.ballSpeedX) * 1.5, maxSpeedX) * Math.sign(this.ballSpeedX);
+        this.boostedSpeedY = Math.min(Math.abs(this.ballSpeedY) * 1.5, maxSpeedY) * Math.sign(this.ballSpeedY);
+        this.ballSpeedX = this.boostedSpeedX;
+        this.ballSpeedY = this.boostedSpeedY;
+        this.rightSpeedBoostActive = true;
+        console.log(`Speed Boost activated for right paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
+      } else if (powerUp.type === "paddleExtend") {
+        this.paddleRightHeight = 120 * this.scale;
+        this.rightPaddleExtendActive = true;
+        console.log("Right paddle extended!");
+        setTimeout(() => {
+          this.paddleRightHeight = 80 * this.scale;
+          this.rightPaddleExtendActive = false;
+          console.log("Right paddle reverted to normal size");
+        }, 5000);
+      }
+    }
+  });
+}
 
   // Checks for collisions between the ball and buildings
   private checkBuildingCollision(): void {
@@ -504,11 +504,19 @@ export class NeonCityPong extends PongGame {
   }
 
   // Main draw loop for rendering the game
-  protected draw(): void {
+  protected draw(timestamp: number = performance.now()): void {
     if (!this.ctx) {
       console.error("Canvas context is null");
       return;
     }
+
+    // Calculate delta time (in seconds)
+    const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
+    this.lastTime = timestamp;
+
+    // Target 60 FPS for normalization (1/60 seconds per frame)
+    const frameTime = 1 / 60;
+    const deltaTimeFactor = deltaTime / frameTime; // Scale movements to match 60 FPS
 
     // Clear the main canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -535,14 +543,14 @@ export class NeonCityPong extends PongGame {
     // Update game state if the game is active
     if (this.gameStarted && !this.isPaused && !this.gameOver) {
       // Handle paddle movement based on key inputs
-      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed;
-      if (this.keys.s && this.paddleLeftY < this.canvas.height - this.paddleLeftHeight) this.paddleLeftY += this.paddleSpeed;
-      if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed;
-      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - this.paddleRightHeight) this.paddleRightY += this.paddleSpeed;
+      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.s && this.paddleLeftY < this.canvas.height - this.paddleLeftHeight) this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - this.paddleRightHeight) this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
 
       // Update ball position
-      this.ballX += this.ballSpeedX;
-      this.ballY += this.ballSpeedY;
+      this.ballX += this.ballSpeedX * deltaTimeFactor;
+      this.ballY += this.ballSpeedY * deltaTimeFactor;
 
       // Bounce ball off top and bottom walls
       if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
@@ -606,9 +614,9 @@ export class NeonCityPong extends PongGame {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
           // Reset ball speed with slider value
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-          this.ballSpeedX = 2.5 * this.scale * speedMultiplier; // Move right (positive)
-          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Random Y direction
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier; // Move right (positive)
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Random Y direction
           this.isSpeedBoosted = false; // Reset speed boost
           this.boostedSpeedX = 0;
           this.boostedSpeedY = 0;
@@ -637,9 +645,9 @@ export class NeonCityPong extends PongGame {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
           // Reset ball speed with slider value
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-          this.ballSpeedX = -2.5 * this.scale * speedMultiplier; // Move left (negative)
-          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Random Y direction
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = -this.baseBallSpeedX * this.scale * speedMultiplier; // Move left (negative)
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Random Y direction
           this.isSpeedBoosted = false; // Reset speed boost
           this.boostedSpeedX = 0;
           this.boostedSpeedY = 0;

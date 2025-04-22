@@ -3,12 +3,10 @@ import { StatsManager } from "./stats.js";
 
 // Extends the base PongGame to include an AI-controlled right paddle
 export class AIPong extends PongGame {
-  // AI difficulty (0.6 to 0.9, adjusted dynamically)
-  private aiDifficulty: number = 0.7;
-  // Frames per AI update (1 second at 60 FPS)
-  private aiUpdateInterval: number = 60;
-  // Counter to track frames since last AI update
-  private aiUpdateCounter: number = 0;
+  // AI difficulty (0.5 to 0.8, adjusted dynamically)
+  private aiDifficulty: number = 0.6;
+  // Time accumulator for AI updates (seconds)
+  private aiElapsedTime: number = 0;
   // Target Y position for AI paddle
   private aiTargetY: number;
   // Simulated key state (true = down, false = up, null = no movement)
@@ -96,7 +94,15 @@ export class AIPong extends PongGame {
   };
 
   // Override draw to include AI paddle movement
-  protected draw(): void {
+  protected draw(timestamp: number = performance.now()): void {
+    // Calculate delta time (in seconds)
+    const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
+    this.lastTime = timestamp;
+
+    // Target 60 FPS for normalization (1/60 seconds per frame)
+    const frameTime = 1 / 60;
+    const deltaTimeFactor = deltaTime / frameTime; // Scale movements to match 60 FPS
+
     // Clear canvas with background color
     this.ctx.fillStyle = this.backgroundColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -109,15 +115,15 @@ export class AIPong extends PongGame {
     // Update game state if not paused or over
     if (this.gameStarted && !this.isPaused && !this.gameOver) {
       // Move left paddle (player-controlled)
-      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed;
-      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) this.paddleLeftY += this.paddleSpeed;
+      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
 
       // AI controls right paddle
-      this.updateAIPaddle();
+      this.updateAIPaddle(deltaTime, deltaTimeFactor);
 
       // Update ball position
-      this.ballX += this.ballSpeedX;
-      this.ballY += this.ballSpeedY;
+      this.ballX += this.ballSpeedX * deltaTimeFactor;
+      this.ballY += this.ballSpeedY * deltaTimeFactor;
 
       // Bounce off top and bottom walls
       if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
@@ -166,11 +172,10 @@ export class AIPong extends PongGame {
           // Reset ball position
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
-          // Maintain current speed magnitude based on speedSlider
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5;
-          const speedMagnitude = Math.sqrt(this.ballSpeedX ** 2 + this.ballSpeedY ** 2);
-          this.ballSpeedX = 2.5 * this.scale * speedMultiplier; // Set direction to left
-          this.ballSpeedY = (speedMagnitude * (Math.random() > 0.5 ? 1 : -1)) * (1.5 / 2.5); // Maintain proportional Y speed
+          // Reset ball speed with slider value
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier; // Set direction to left
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Maintain proportional Y speed
         }
       } else if (this.ballX > this.canvas.width) {
         this.scoreLeft++;
@@ -191,11 +196,10 @@ export class AIPong extends PongGame {
           // Reset ball position
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
-          // Maintain current speed magnitude based on speedSlider
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5;
-          const speedMagnitude = Math.sqrt(this.ballSpeedX ** 2 + this.ballSpeedY ** 2);
-          this.ballSpeedX = -2.5 * this.scale * speedMultiplier; // Set direction to right
-          this.ballSpeedY = (speedMagnitude * (Math.random() > 0.5 ? 1 : -1)) * (1.5 / 2.5); // Maintain proportional Y speed
+          // Reset ball speed with slider value
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = -this.baseBallSpeedX * this.scale * speedMultiplier; // Set direction to right
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1); // Maintain proportional Y speed
         }
       }
     }
@@ -226,30 +230,35 @@ export class AIPong extends PongGame {
     }
 
     // Continue animation loop
-    requestAnimationFrame(() => this.draw());
+    requestAnimationFrame((time) => this.draw(time));
   }
 
   // Updates the AI-controlled right paddle
-  private updateAIPaddle(): void {
-    // Increment update counter
-    this.aiUpdateCounter++;
+  private updateAIPaddle(deltaTime: number, deltaTimeFactor: number): void {
+    // Accumulate elapsed time for AI update
+    this.aiElapsedTime += deltaTime;
 
-    // Adjust difficulty based on score difference
+    // Adjust difficulty based on score difference and speed slider
     const scoreDifference = this.scoreLeft - this.scoreRight;
-    this.aiDifficulty = Math.min(0.9, Math.max(0.6, 0.7 + scoreDifference * 0.05)); // Increase if AI is losing, decrease if winning
+    const speedMultiplier = this.getSpeedMultiplier();
+    // Increase difficulty at lower speeds, decrease at higher speeds
+    const speedAdjustment = (1.0 - (speedMultiplier - 1.0)) * 0.1; // Ranges from 0.18 (min speed) to 0.0 (max speed)
+    this.aiDifficulty = Math.min(0.8, Math.max(0.5, 0.6 + scoreDifference * 0.05 + speedAdjustment));
 
-    // Update target Y only once per second (60 frames)
-    if (this.aiUpdateCounter >= this.aiUpdateInterval) {
+    // Update target Y only once per second
+    if (this.aiElapsedTime >= 1) {
       // Predict ball's Y position when it reaches the right paddle
       const predictedY = this.predictBallPosition();
       const paddleCenter = this.paddleRightY + (80 * this.scale) / 2;
 
-      // Introduce error based on difficulty (lower difficulty = more error)
-      const error = (1 - this.aiDifficulty) * (Math.random() - 0.5) * 100 * this.scale;
+      // Introduce error based on difficulty and speed (smaller error at low speeds, larger at high speeds)
+      const baseError = 200 * this.scale;
+      const errorScale = 1.0 + (speedMultiplier - 1.0) * 0.25; // Ranges from 0.8 (min speed) to 1.25 (max speed)
+      const error = (1 - this.aiDifficulty) * (Math.random() - 0.5) * baseError * errorScale;
       this.aiTargetY = predictedY - (80 * this.scale) / 2 + error;
 
-      // Reset counter
-      this.aiUpdateCounter = 0;
+      // Reset elapsed time
+      this.aiElapsedTime = 0;
     }
 
     // Simulate keyboard input for human-like movement at player paddle speed
@@ -265,12 +274,12 @@ export class AIPong extends PongGame {
       this.aiKeyState = null; // No movement
     }
 
-    // Apply movement at same speed as player paddle
+    // Apply movement at same speed as player paddle, scaled by deltaTime
     if (this.aiKeyState !== null) {
       if (this.aiKeyState && this.paddleRightY < this.canvas.height - 80 * this.scale) {
-        this.paddleRightY += this.paddleSpeed; // Move down
+        this.paddleRightY += this.paddleSpeed * deltaTimeFactor; // Move down
       } else if (!this.aiKeyState && this.paddleRightY > 0) {
-        this.paddleRightY -= this.paddleSpeed; // Move up
+        this.paddleRightY -= this.paddleSpeed * deltaTimeFactor; // Move up
       }
     }
 

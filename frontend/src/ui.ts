@@ -80,6 +80,7 @@ export function renderLoggedInWelcomePage(
               <option value="standard">Standard Pong</option>
               <option value="neonCity">Neon City Pong</option>
               <option value="ai">AI Pong</option>
+              <option value="spaceBattle">Space Battle</option>
             </select>
             <button id="playMatchButton" class="action-button">
               Play Match
@@ -298,14 +299,14 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
               </select>
             </div>
             <div class="flex items-center gap-2">
-              <label for="speedSlider" class="text-white">Ball Speed:</label>
+              <label for="speedSlider" class="text-white">Target Speed:</label>
               <input type="range" id="speedSlider" min="1" max="10" value="5" class="speed-slider">
             </div>
           </div>
         </div>
         <div id="buttonContainer" class="button-container">
           <button id="restartButton" class="game-control-button">Start</button>
-          <button id="backButton" class="game-control-button">Back</button>
+          <button id="backButton" class="game-control-button" style="display: none;">Back</button>
         </div>
       </div>
     </div>

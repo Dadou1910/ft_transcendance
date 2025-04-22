@@ -26,8 +26,8 @@ export class PongGame {
   protected paddleRightY: number = 160;
   protected ballX: number = 400;
   protected ballY: number = 200;
-  protected ballSpeedX: number = 2.5;
-  protected ballSpeedY: number = 1.5;
+  protected ballSpeedX: number = 6.0;
+  protected ballSpeedY: number = 4.1;
   protected scoreLeft: number = 0;
   protected scoreRight: number = 0;
   protected gameOver: boolean = false;
@@ -46,11 +46,17 @@ export class PongGame {
     ArrowUp: false,
     ArrowDown: false,
   };
+  // Base ball speeds
+  protected baseBallSpeedX: number = 6.0;
+  protected baseBallSpeedY: number = 4.1;
 
   // Canvas dimensions and scaling
   protected baseWidth: number = 800;
   protected baseHeight: number = 400;
   protected scale: number = 1;
+
+  // Timing for delta-time calculation
+  protected lastTime: number = 0; // Stores timestamp of last frame
 
   // Initializes the game with player names and UI element IDs
   constructor(
@@ -107,12 +113,17 @@ export class PongGame {
     this.setupEventListeners();
     this.resizeCanvas();
     window.addEventListener("resize", () => this.resizeCanvas());
-    this.draw();
+    this.draw(performance.now()); // Initialize with current time
   }
 
   // Cleans up event listeners
   public cleanup(): void {
     window.removeEventListener("resize", () => this.resizeCanvas());
+  }
+
+  // Computes the speed multiplier based on the speed slider
+  protected getSpeedMultiplier(): number {
+    return parseInt(this.speedSlider.value) / 5; // Default slider value of 5 gives multiplier of 1
   }
 
   // Resizes canvas based on browser window size and maintains aspect ratio
@@ -139,9 +150,9 @@ export class PongGame {
     this.ballX = (this.baseWidth / 2) * this.scale;
     this.ballY = (this.baseHeight / 2) * this.scale;
     // Initialize ball speed with slider value
-    const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default slider value
-    this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
-    this.ballSpeedY = 1.5 * this.scale * speedMultiplier;
+    const speedMultiplier = this.getSpeedMultiplier();
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier;
     this.paddleLeftY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleRightY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleSpeed = 7 * this.scale;
@@ -150,13 +161,12 @@ export class PongGame {
   // Sets up event listeners for game controls and settings
   protected setupEventListeners() {
     this.speedSlider.addEventListener("input", (e) => {
-      const speed = parseInt((e.target as HTMLInputElement).value);
+      const speedMultiplier = this.getSpeedMultiplier();
       // Update ball speed based on slider value
-      const speedMultiplier = speed / 5; // Assuming 5 is default slider value
-      this.ballSpeedX = 2.5 * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale * speedMultiplier;
-      this.ballSpeedY = 1.5 * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale * speedMultiplier;
+      this.ballSpeedX = this.baseBallSpeedX * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale * speedMultiplier;
+      this.ballSpeedY = this.baseBallSpeedY * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale * speedMultiplier;
       if (this.userEmail) {
-        this.statsManager.setUserSettings(this.userEmail, { ballSpeed: speed });
+        this.statsManager.setUserSettings(this.userEmail, { ballSpeed: parseInt((e.target as HTMLInputElement).value) });
       }
     });
 
@@ -195,9 +205,9 @@ export class PongGame {
         this.ballX = (this.baseWidth / 2) * this.scale;
         this.ballY = (this.baseHeight / 2) * this.scale;
         // Reset ball speed with slider value
-        const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-        this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
-        this.ballSpeedY = 1.5 * this.scale * speedMultiplier;
+        const speedMultiplier = this.getSpeedMultiplier();
+        this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+        this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         this.restartButton.style.display = "none";
       }
     });
@@ -219,7 +229,15 @@ export class PongGame {
   }
 
   // Renders the game and updates game state
-  protected draw() {
+  protected draw(timestamp: number = performance.now()) {
+    // Calculate delta time (in seconds)
+    const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
+    this.lastTime = timestamp;
+
+    // Target 60 FPS for normalization (1/60 seconds per frame)
+    const frameTime = 1 / 60;
+    const deltaTimeFactor = deltaTime / frameTime; // Scale movements to match 60 FPS
+
     // Clear canvas with background color
     this.ctx.fillStyle = this.backgroundColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -231,15 +249,15 @@ export class PongGame {
 
     // Update game state if not paused or over
     if (this.gameStarted && !this.isPaused && !this.gameOver) {
-      // Move paddles based on key input
-      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed;
-      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) this.paddleLeftY += this.paddleSpeed;
-      if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed;
-      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - 80 * this.scale) this.paddleRightY += this.paddleSpeed;
+      // Move paddles based on key input, scaled by deltaTime
+      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed * deltaTimeFactor;
+      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - 80 * this.scale) this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
 
-      // Update ball position
-      this.ballX += this.ballSpeedX;
-      this.ballY += this.ballSpeedY;
+      // Update ball position, scaled by deltaTime
+      this.ballX += this.ballSpeedX * deltaTimeFactor;
+      this.ballY += this.ballSpeedY * deltaTimeFactor;
 
       // Bounce off top and bottom walls
       if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
@@ -292,9 +310,9 @@ export class PongGame {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
           // Reset ball speed with slider value
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-          this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
-          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
       } else if (this.ballX > this.canvas.width) {
         this.scoreLeft++;
@@ -315,9 +333,9 @@ export class PongGame {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
           // Reset ball speed with slider value
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-          this.ballSpeedX = -2.5 * this.scale * speedMultiplier;
-          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = -this.baseBallSpeedX * this.scale * speedMultiplier;
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
       }
     }
@@ -348,6 +366,6 @@ export class PongGame {
     }
 
     // Continue animation loop
-    requestAnimationFrame(() => this.draw());
+    requestAnimationFrame((time) => this.draw(time));
   }
 }
