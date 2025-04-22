@@ -18,8 +18,6 @@ export class PongGame {
   protected statsManager: StatsManager;
   // User email for settings persistence
   protected userEmail: string | null;
-  // Button to navigate back to welcome page
-  protected backButton: HTMLButtonElement;
   // Navigation callback
   protected navigate: (path: string) => void;
 
@@ -28,8 +26,8 @@ export class PongGame {
   protected paddleRightY: number = 160;
   protected ballX: number = 400;
   protected ballY: number = 200;
-  protected ballSpeedX: number = 5;
-  protected ballSpeedY: number = 3;
+  protected ballSpeedX: number = 2.5;
+  protected ballSpeedY: number = 1.5;
   protected scoreLeft: number = 0;
   protected scoreRight: number = 0;
   protected gameOver: boolean = false;
@@ -89,27 +87,21 @@ export class PongGame {
     this.onGameEnd = onGameEnd;
     this.navigate = navigate || (() => {});
 
-    // Create and style back button
-    this.backButton = document.createElement("button");
-    this.backButton.textContent = "Back";
-    this.backButton.classList.add("back-button");
-    this.backButton.addEventListener("click", () => {
-      this.cleanup();
-      this.navigate("/welcome");
-    });
-
-    // Append buttons to button container
+    // Ensure restartButton is in buttonContainer
     const buttonContainer = document.getElementById("buttonContainer");
-    if (buttonContainer) {
-      buttonContainer.appendChild(this.backButton);
-      // Ensure restartButton is in buttonContainer
-      if (this.restartButton.parentElement !== buttonContainer) {
-        buttonContainer.appendChild(this.restartButton);
-      }
+    if (buttonContainer && this.restartButton.parentElement !== buttonContainer) {
+      buttonContainer.appendChild(this.restartButton);
+    }
+
+    // Attach event listener to the existing backButton
+    const backButton = document.getElementById("backButton") as HTMLButtonElement;
+    if (backButton) {
+      backButton.addEventListener("click", () => {
+        this.cleanup();
+        this.navigate("/welcome");
+      });
     } else {
-      console.error("Button container not found, appending buttons to body instead");
-      document.body.appendChild(this.backButton);
-      document.body.appendChild(this.restartButton);
+      console.error("Back button not found!");
     }
 
     this.setupEventListeners();
@@ -118,18 +110,15 @@ export class PongGame {
     this.draw();
   }
 
-  // Cleans up event listeners and removes buttons
+  // Cleans up event listeners
   public cleanup(): void {
-    if (this.backButton) {
-      this.backButton.remove();
-    }
     window.removeEventListener("resize", () => this.resizeCanvas());
   }
 
   // Resizes canvas based on browser window size and maintains aspect ratio
   protected resizeCanvas(): void {
-    const maxWidth = window.innerWidth * 0.9; // Use 90% of browser width
-    const maxHeight = window.innerHeight * 0.9; // Use 90% of browser height
+    const maxWidth = window.innerWidth * 0.9;
+    const maxHeight = window.innerHeight * 0.9;
     const aspectRatio = this.baseWidth / this.baseHeight;
 
     let newWidth = Math.min(maxWidth, this.baseWidth);
@@ -144,32 +133,33 @@ export class PongGame {
     this.canvas.width = newWidth;
     this.canvas.height = newHeight;
 
-    // Center the canvas
     this.canvas.style.display = "block";
     this.canvas.style.margin = "auto";
 
     this.ballX = (this.baseWidth / 2) * this.scale;
     this.ballY = (this.baseHeight / 2) * this.scale;
+    // Initialize ball speed with slider value
+    const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default slider value
+    this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
+    this.ballSpeedY = 1.5 * this.scale * speedMultiplier;
     this.paddleLeftY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleRightY = (this.baseHeight / 2 - 40) * this.scale;
-    this.ballSpeedX = 5 * this.scale;
-    this.ballSpeedY = 3 * this.scale;
-    this.paddleSpeed = 5 * this.scale;
+    this.paddleSpeed = 7 * this.scale;
   }
 
   // Sets up event listeners for game controls and settings
   protected setupEventListeners() {
-    // Adjust ball speed based on slider input
     this.speedSlider.addEventListener("input", (e) => {
       const speed = parseInt((e.target as HTMLInputElement).value);
-      this.ballSpeedX = speed * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
-      this.ballSpeedY = (speed * this.ballSpeedY) / Math.abs(this.ballSpeedX) * this.scale;
+      // Update ball speed based on slider value
+      const speedMultiplier = speed / 5; // Assuming 5 is default slider value
+      this.ballSpeedX = 2.5 * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale * speedMultiplier;
+      this.ballSpeedY = 1.5 * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale * speedMultiplier;
       if (this.userEmail) {
         this.statsManager.setUserSettings(this.userEmail, { ballSpeed: speed });
       }
     });
 
-    // Update background color based on selection
     if (this.backgroundColorSelect) {
       this.backgroundColorSelect.addEventListener("change", (e) => {
         this.backgroundColor = (e.target as HTMLSelectElement).value;
@@ -181,20 +171,17 @@ export class PongGame {
       console.warn("Background color select element not found");
     }
 
-    // Toggle settings menu visibility
     this.settingsButton.addEventListener("click", (e) => {
       e.stopPropagation();
       this.settingsMenu.classList.toggle("visible");
     });
 
-    // Close settings menu when clicking outside
     document.addEventListener("click", (e) => {
       if (!this.settingsContainer.contains(e.target as Node)) {
         this.settingsMenu.classList.remove("visible");
       }
     });
 
-    // Handle game start/restart
     this.restartButton.addEventListener("click", () => {
       if (!this.gameStarted) {
         this.gameStarted = true;
@@ -207,13 +194,14 @@ export class PongGame {
         this.gameOver = false;
         this.ballX = (this.baseWidth / 2) * this.scale;
         this.ballY = (this.baseHeight / 2) * this.scale;
-        this.ballSpeedX = parseInt(this.speedSlider.value) * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
-        this.ballSpeedY = parseInt(this.speedSlider.value) * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale;
+        // Reset ball speed with slider value
+        const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
+        this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
+        this.ballSpeedY = 1.5 * this.scale * speedMultiplier;
         this.restartButton.style.display = "none";
       }
     });
 
-    // Handle keyboard controls
     document.addEventListener("keydown", (e) => {
       if (e.key === " " && this.gameStarted) {
         this.isPaused = !this.isPaused;
@@ -258,60 +246,30 @@ export class PongGame {
         this.ballSpeedY = -this.ballSpeedY;
       }
 
-      // Bounce off left paddle
+      // Handle left paddle collision
       if (
-        this.ballX - 10 * this.scale >= 10 * this.scale &&
         this.ballX - 10 * this.scale <= 30 * this.scale &&
-        this.ballY >= this.paddleLeftY &&
-        this.ballY <= this.paddleLeftY + 80 * this.scale
-      ) {
-        this.ballSpeedX = -this.ballSpeedX;
-      } else if (
         this.ballX + 10 * this.scale >= 10 * this.scale &&
-        this.ballX + 10 * this.scale <= 30 * this.scale &&
         this.ballY >= this.paddleLeftY &&
         this.ballY <= this.paddleLeftY + 80 * this.scale
       ) {
+        // Reverse horizontal velocity
         this.ballSpeedX = -this.ballSpeedX;
-      } else if (
-        this.ballX >= 10 * this.scale &&
-        this.ballX <= 30 * this.scale &&
-        (this.ballY - 10 * this.scale <= this.paddleLeftY + 80 * this.scale && this.ballY + 10 * this.scale >= this.paddleLeftY)
-      ) {
-        this.ballSpeedY = -this.ballSpeedY;
-        if (this.ballY < this.paddleLeftY + 40 * this.scale) {
-          this.ballY = this.paddleLeftY - 10 * this.scale; // Place above paddle
-        } else {
-          this.ballY = this.paddleLeftY + 80 * this.scale + 10 * this.scale; // Place below paddle
-        }
+        // Reposition ball to prevent re-collision
+        this.ballX = 30 * this.scale + 10 * this.scale; // Place right of paddle
       }
 
-      // Bounce off right paddle
+      // Handle right paddle collision
       if (
         this.ballX + 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
-        this.ballX + 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
-        this.ballY >= this.paddleRightY &&
-        this.ballY <= this.paddleRightY + 80 * this.scale
-      ) {
-        this.ballSpeedX = -this.ballSpeedX;
-      } else if (
-        this.ballX - 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
         this.ballX - 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
         this.ballY >= this.paddleRightY &&
         this.ballY <= this.paddleRightY + 80 * this.scale
       ) {
+        // Reverse horizontal velocity
         this.ballSpeedX = -this.ballSpeedX;
-      } else if (
-        this.ballX >= (this.baseWidth - 30) * this.scale &&
-        this.ballX <= (this.baseWidth - 10) * this.scale &&
-        (this.ballY - 10 * this.scale <= this.paddleRightY + 80 * this.scale && this.ballY + 10 * this.scale >= this.paddleRightY)
-      ) {
-        this.ballSpeedY = -this.ballSpeedY;
-        if (this.ballY < this.paddleRightY + 40 * this.scale) {
-          this.ballY = this.paddleRightY - 10 * this.scale; // Place above paddle
-        } else {
-          this.ballY = this.paddleRightY + 80 * this.scale + 10 * this.scale; // Place below paddle
-        }
+        // Reposition ball to prevent re-collision
+        this.ballX = (this.baseWidth - 30) * this.scale - 10 * this.scale; // Place left of paddle
       }
 
       // Handle scoring
@@ -321,7 +279,8 @@ export class PongGame {
         if (this.scoreRight >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          this.backButton.style.display = "block";
+          const backButton = document.getElementById("backButton") as HTMLButtonElement;
+          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight
@@ -332,8 +291,10 @@ export class PongGame {
         } else {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
-          this.ballSpeedX = parseInt(this.speedSlider.value) * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
-          this.ballSpeedY = parseInt(this.speedSlider.value) * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale;
+          // Reset ball speed with slider value
+          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
+          this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
+          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
       } else if (this.ballX > this.canvas.width) {
         this.scoreLeft++;
@@ -341,7 +302,8 @@ export class PongGame {
         if (this.scoreLeft >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          this.backButton.style.display = "block";
+          const backButton = document.getElementById("backButton") as HTMLButtonElement;
+          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight
@@ -352,8 +314,10 @@ export class PongGame {
         } else {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
-          this.ballSpeedX = parseInt(this.speedSlider.value) * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale;
-          this.ballSpeedY = parseInt(this.speedSlider.value) * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale;
+          // Reset ball speed with slider value
+          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
+          this.ballSpeedX = -2.5 * this.scale * speedMultiplier;
+          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
       }
     }

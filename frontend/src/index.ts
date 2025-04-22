@@ -23,6 +23,8 @@ import { Tournament } from "./tournament.js";
 import { PongGame } from "./game.js";
 // Imports NeonCityPong class for the neon-themed game mode
 import { NeonCityPong } from "./neonCityPong.js";
+// Imports AI Pong class for AI opponent mode
+import { AIPong } from "./AIPong.js";
 // Imports Bracket class for tournament bracket management
 import { Bracket } from "./bracket.js";
 // Imports StatsManager and Player type for player statistics
@@ -36,7 +38,7 @@ const tournamentId = uuidv4();
 const tournament = new Tournament(statsManager, tournamentId);
 // Initializes Router with the app container ID and route listener setup
 const router = new Router("app", setupRouteListeners);
-// Stores the current game instance (PongGame or NeonCityPong)
+// Stores the current game instance (PongGame, NeonCityPong, or AIPong)
 let gameInstance: PongGame | null = null;
 // Stores the current tournament bracket instance
 let bracketInstance: Bracket | null = null;
@@ -323,6 +325,41 @@ router.addRoute("/neonCityGame", () => {
   return html;
 });
 
+// Defines AI game route ("/aiGame")
+router.addRoute("/aiGame", () => {
+  // Redirects to root if no players are in the tournament
+  if (!tournament.hasPlayers()) {
+    router.navigate("/");
+    return "";
+  }
+  // Uses default players for non-tournament mode (AI is always non-tournament)
+  const [left] = tournament.getPlayers();
+  const right = "AI Opponent";
+  // Renders game view
+  const html = renderGameView(left, right);
+  // Initializes AIPong instance
+  setTimeout(() => {
+    gameInstance = new AIPong(
+      left,
+      right,
+      "pongCanvas",
+      "speedSlider",
+      "backgroundColorSelect",
+      "scoreLeft",
+      "scoreRight",
+      "restartButton",
+      "settingsButton",
+      "settingsMenu",
+      "settingsContainer",
+      statsManager,
+      statsManager.getCurrentUser()?.email || null,
+      undefined, // No onGameEnd callback since not in tournament
+      navigate
+    );
+  }, 0);
+  return html;
+});
+
 // Starts the router
 router.start();
 
@@ -354,6 +391,8 @@ function setupRouteListeners() {
               router.navigate("/game");
             } else if (selectedMode === "neonCity") {
               router.navigate("/neonCityGame");
+            } else if (selectedMode === "ai") {
+              router.navigate("/aiGame");
             }
           } else {
             console.error("gameModeSelect not found!");
