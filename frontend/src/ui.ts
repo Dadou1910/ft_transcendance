@@ -86,6 +86,9 @@ export function renderLoggedInWelcomePage(
               Play Match
             </button>
           </div>
+          <button id="playMultiplayerButton" class="action-button">
+            Play Multiplayer
+          </button>
         </div>
         <div class="about-pong">
           <h2 class="about-title">
@@ -108,11 +111,13 @@ export function setupLoggedInWelcomePage(
   onLogout: () => void,
   username: string,
   onPlayMatch: () => void,
-  onPlayTournament?: () => void
+  onPlayTournament?: () => void,
+  onPlayMultiplayer?: () => void // Add callback for multiplayer
 ) {
   const logoutLink = document.getElementById("logoutLink") as HTMLAnchorElement;
   const playMatchButton = document.getElementById("playMatchButton") as HTMLButtonElement;
   const playTournamentButton = document.getElementById("playTournamentButton") as HTMLButtonElement;
+  const playMultiplayerButton = document.getElementById("playMultiplayerButton") as HTMLButtonElement;
   const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
   const toggleSidebarButton = document.getElementById("toggleSidebarButton") as HTMLButtonElement;
   const sidebar = document.getElementById("sidebar") as HTMLDivElement;
@@ -163,6 +168,22 @@ export function setupLoggedInWelcomePage(
     });
   } else {
     console.error("Play Tournament button or callback not found!");
+  }
+
+  // Attach play multiplayer event listener
+  if (playMultiplayerButton && onPlayMultiplayer) {
+    console.log("Attaching listener to play multiplayer button");
+    playMultiplayerButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      console.log("Play Multiplayer button clicked, calling onPlayMultiplayer");
+      try {
+        onPlayMultiplayer();
+      } catch (error) {
+        console.error("Error in onPlayMultiplayer:", error);
+      }
+    });
+  } else {
+    console.error("Play Multiplayer button or callback not found!");
   }
 
   // Attach sidebar toggle event listener
@@ -269,7 +290,7 @@ export function setupNameForm(onSubmit: (player1: string, player2: string, playe
 // Section 4: Game Screen
 // ------------------------------------------
 // Renders the game view with player names and optional round number
-export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number): string {
+export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number, isMultiplayer: boolean = false): string {
   const leftDisplayName = playerLeftName.trim() || "Player 1";
   const rightDisplayName = playerRightName.trim() || "Player 2";
   return `
@@ -285,6 +306,11 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
       </div>
       <div class="game-area flex gap-5 items-start relative">
         <canvas id="pongCanvas" width="800" height="400" class="pong-canvas"></canvas>
+        ${isMultiplayer ? `
+          <div id="waitingMessage" class="waiting-message absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+            <p class="text-white text-2xl">Waiting for opponent...</p>
+          </div>
+        ` : ''}
         <div id="settingsContainer" class="relative w-10">
           <button id="settingsButton" class="settings-button"></button>
           <div id="settingsMenu" class="settings-menu">

@@ -38,6 +38,14 @@ export class PongGame {
   protected backgroundColor: string = "#d8a8b5";
   protected onGameEnd?: (winnerName: string) => void;
 
+  // Multiplayer variables
+  protected isMultiplayer: boolean;
+  protected ws: WebSocket | null = null;
+  protected playerRole: 'player1' | 'player2' | null = null;
+  protected opponentId: string | null = null;
+  protected playerId: string;
+  protected waitingMessage: HTMLDivElement | null = null;
+
   // Game constants
   protected paddleSpeed: number = 5;
   protected keys: Record<"w" | "s" | "ArrowUp" | "ArrowDown", boolean> = {
@@ -74,7 +82,8 @@ export class PongGame {
     statsManager: StatsManager,
     userEmail: string | null,
     onGameEnd?: (winnerName: string) => void,
-    navigate?: (path: string) => void
+    navigate?: (path: string) => void,
+    isMultiplayer: boolean = false // Add multiplayer flag
   ) {
     this.playerLeftName = playerLeftName;
     this.playerRightName = playerRightName;
@@ -92,6 +101,10 @@ export class PongGame {
     this.userEmail = userEmail;
     this.onGameEnd = onGameEnd;
     this.navigate = navigate || (() => {});
+    this.isMultiplayer = isMultiplayer;
+
+    // Generate a unique player ID
+    this.playerId = `player_${Math.random().toString(36).substring(2, 9)}`;
 
     // Ensure restartButton is in buttonContainer
     const buttonContainer = document.getElementById("buttonContainer");
@@ -110,15 +123,135 @@ export class PongGame {
       console.error("Back button not found!");
     }
 
+    // Initialize WebSocket for multiplayer mode
+    if (this.isMultiplayer) {
+      this.waitingMessage = document.getElementById("waitingMessage") as HTMLDivElement;
+      if (this.waitingMessage) {
+        this.waitingMessage.classList.remove("hidden");
+      }
+      this.setupWebSocket();
+    }
+
     this.setupEventListeners();
     this.resizeCanvas();
     window.addEventListener("resize", () => this.resizeCanvas());
     this.draw(performance.now()); // Initialize with current time
   }
 
-  // Cleans up event listeners
+  // Sets up WebSocket connection for multiplayer
+  protected setupWebSocket(): void {
+    this.ws = new WebSocket("ws://localhost:4000/ws/game");
+
+    this.ws.onopen = () => {
+      console.log("Connected to WebSocket server");
+      console.log(`Sending join message for player: ${this.playerId}`);
+      this.ws?.send(JSON.stringify({ type: "join", playerId: this.playerId }));
+    };
+
+    this.ws.onmessage = (event) => {
+      console.log("Raw WebSocket message received:", event.data);
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+        return;
+      }
+      console.log("Parsed WebSocket message:", data);
+
+      if (data.type === "paired") {
+        console.log(`Paired as ${data.role} with opponent ${data.opponentId}`);
+        this.playerRole = data.role;
+        this.opponentId = data.opponentId;
+        console.log(`Paired as ${this.playerRole} against ${this.opponentId}`);
+        // Update player names in UI
+        if (this.playerRole === "player1") {
+          this.playerLeftName = this.playerId;
+          this.playerRightName = this.opponentId!;
+        } else {
+          this.playerLeftName = this.opponentId!;
+          this.playerRightName = this.playerId;
+        }
+        const playerLeftDisplay = document.getElementById("playerLeftNameDisplay") as HTMLSpanElement;
+        const playerRightDisplay = document.getElementById("playerRightNameDisplay") as HTMLSpanElement;
+        playerLeftDisplay.textContent = this.playerLeftName;
+        playerRightDisplay.textContent = this.playerRightName;
+        // Hide waiting message
+        if (this.waitingMessage) {
+          console.log("Hiding waiting message");
+          this.waitingMessage.classList.add("hidden");
+        } else {
+          console.error("Waiting message element not found!");
+        }
+        // Enable the Start button
+        this.restartButton.disabled = false;
+        console.log("Start button enabled");
+      } else if (data.type === "paddleMove") {
+        console.log(`Received paddleMove from opponent: ${data.playerId}`);
+        if (data.playerId === this.opponentId) {
+          if (this.playerRole === "player1") {
+            this.paddleRightY = data.position * this.scale;
+          } else {
+            this.paddleLeftY = data.position * this.scale;
+          }
+        }
+      } else if (data.type === "gameState" && this.playerRole === "player2") {
+        console.log("Received gameState update from player1");
+        this.ballX = data.ballX * this.scale;
+        this.ballY = data.ballY * this.scale;
+        this.ballSpeedX = data.ballSpeedX * this.scale;
+        this.ballSpeedY = data.ballSpeedY * this.scale;
+        this.scoreLeft = data.scoreLeft;
+        this.scoreRight = data.scoreRight;
+        this.scoreLeftElement.textContent = this.scoreLeft.toString();
+        this.scoreRightElement.textContent = this.scoreRight.toString();
+        if (data.gameOver) {
+          this.gameOver = true;
+          this.restartButton.style.display = "block";
+          const backButton = document.getElementById("backButton") as HTMLButtonElement;
+          if (backButton) backButton.style.display = "block";
+          if (this.onGameEnd) {
+            this.onGameEnd(data.winnerName);
+          }
+        }
+      } else if (data.type === "opponentDisconnected") {
+        console.log("Opponent disconnected");
+        alert("Opponent disconnected. Game over.");
+        this.cleanup();
+        this.navigate("/welcome");
+      } else {
+        console.warn("Received unknown WebSocket message type:", data.type);
+      }
+    };
+
+    this.ws.onclose = () => {
+      console.log("Disconnected from WebSocket server");
+      if (!this.gameOver) {
+        alert("Disconnected from server. Returning to welcome page.");
+        this.cleanup();
+        this.navigate("/welcome");
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      alert("WebSocket error occurred. Returning to welcome page.");
+      this.cleanup();
+      this.navigate("/welcome");
+    };
+
+    // Disable Start button until paired
+    this.restartButton.disabled = true;
+    console.log("Start button disabled until pairing");
+  }
+
+  // Cleans up event listeners and WebSocket
   public cleanup(): void {
     window.removeEventListener("resize", () => this.resizeCanvas());
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
   }
 
   // Computes the speed multiplier based on the speed slider
@@ -196,6 +329,10 @@ export class PongGame {
       if (!this.gameStarted) {
         this.gameStarted = true;
         this.restartButton.style.display = "none";
+        if (this.isMultiplayer && this.ws && this.playerRole === "player1") {
+          // Player 1 starts the game and notifies Player 2
+          this.ws.send(JSON.stringify({ type: "gameStart" }));
+        }
       } else {
         this.scoreLeft = 0;
         this.scoreRight = 0;
@@ -209,12 +346,18 @@ export class PongGame {
         this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
         this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         this.restartButton.style.display = "none";
+        if (this.isMultiplayer && this.ws && this.playerRole === "player1") {
+          this.ws.send(JSON.stringify({ type: "gameStart" }));
+        }
       }
     });
 
     document.addEventListener("keydown", (e) => {
       if (e.key === " " && this.gameStarted) {
         this.isPaused = !this.isPaused;
+        if (this.isMultiplayer && this.ws && this.playerRole === "player1") {
+          this.ws.send(JSON.stringify({ type: "pause", isPaused: this.isPaused }));
+        }
       }
       if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
         this.keys[e.key as "w" | "s" | "ArrowUp" | "ArrowDown"] = true;
@@ -250,97 +393,154 @@ export class PongGame {
     // Update game state if not paused or over
     if (this.gameStarted && !this.isPaused && !this.gameOver) {
       // Move paddles based on key input, scaled by deltaTime
-      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
-      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
-      if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed * deltaTimeFactor;
-      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - 80 * this.scale) this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
-
-      // Update ball position, scaled by deltaTime
-      this.ballX += this.ballSpeedX * deltaTimeFactor;
-      this.ballY += this.ballSpeedY * deltaTimeFactor;
-
-      // Bounce off top and bottom walls
-      if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
-        this.ballSpeedY = -this.ballSpeedY;
-      }
-
-      // Handle left paddle collision
-      if (
-        this.ballX - 10 * this.scale <= 30 * this.scale &&
-        this.ballX + 10 * this.scale >= 10 * this.scale &&
-        this.ballY >= this.paddleLeftY &&
-        this.ballY <= this.paddleLeftY + 80 * this.scale
-      ) {
-        // Reverse horizontal velocity
-        this.ballSpeedX = -this.ballSpeedX;
-        // Reposition ball to prevent re-collision
-        this.ballX = 30 * this.scale + 10 * this.scale; // Place right of paddle
-      }
-
-      // Handle right paddle collision
-      if (
-        this.ballX + 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
-        this.ballX - 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
-        this.ballY >= this.paddleRightY &&
-        this.ballY <= this.paddleRightY + 80 * this.scale
-      ) {
-        // Reverse horizontal velocity
-        this.ballSpeedX = -this.ballSpeedX;
-        // Reposition ball to prevent re-collision
-        this.ballX = (this.baseWidth - 30) * this.scale - 10 * this.scale; // Place left of paddle
-      }
-
-      // Handle scoring
-      if (this.ballX < 0) {
-        this.scoreRight++;
-        this.scoreRightElement.textContent = this.scoreRight.toString();
-        if (this.scoreRight >= 3) {
-          this.gameOver = true;
-          this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, {
-            player1Score: this.scoreLeft,
-            player2Score: this.scoreRight
-          });
-          if (this.onGameEnd) {
-            this.onGameEnd(this.playerRightName);
+      if (!this.isMultiplayer || this.playerRole === "player1") {
+        if (this.keys.w && this.paddleLeftY > 0) {
+          this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
+          if (this.isMultiplayer && this.ws) {
+            this.ws.send(JSON.stringify({
+              type: "paddleMove",
+              position: this.paddleLeftY / this.scale, // Send unscaled position
+              playerId: this.playerId
+            }));
           }
-        } else {
-          this.ballX = (this.baseWidth / 2) * this.scale;
-          this.ballY = (this.baseHeight / 2) * this.scale;
-          // Reset ball speed with slider value
-          const speedMultiplier = this.getSpeedMultiplier();
-          this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
-          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
-      } else if (this.ballX > this.canvas.width) {
-        this.scoreLeft++;
-        this.scoreLeftElement.textContent = this.scoreLeft.toString();
-        if (this.scoreLeft >= 3) {
-          this.gameOver = true;
-          this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, {
-            player1Score: this.scoreLeft,
-            player2Score: this.scoreRight
-          });
-          if (this.onGameEnd) {
-            this.onGameEnd(this.playerLeftName);
+        if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) {
+          this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
+          if (this.isMultiplayer && this.ws) {
+            this.ws.send(JSON.stringify({
+              type: "paddleMove",
+              position: this.paddleLeftY / this.scale,
+              playerId: this.playerId
+            }));
           }
-        } else {
-          this.ballX = (this.baseWidth / 2) * this.scale;
-          this.ballY = (this.baseHeight / 2) * this.scale;
-          // Reset ball speed with slider value
-          const speedMultiplier = this.getSpeedMultiplier();
-          this.ballSpeedX = -this.baseBallSpeedX * this.scale * speedMultiplier;
-          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+        }
+      }
+      if (!this.isMultiplayer || this.playerRole === "player2") {
+        if (this.keys.ArrowUp && this.paddleRightY > 0) {
+          this.paddleRightY -= this.paddleSpeed * deltaTimeFactor;
+          if (this.isMultiplayer && this.ws) {
+            this.ws.send(JSON.stringify({
+              type: "paddleMove",
+              position: this.paddleRightY / this.scale,
+              playerId: this.playerId
+            }));
+          }
+        }
+        if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - 80 * this.scale) {
+          this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
+          if (this.isMultiplayer && this.ws) {
+            this.ws.send(JSON.stringify({
+              type: "paddleMove",
+              position: this.paddleRightY / this.scale,
+              playerId: this.playerId
+            }));
+          }
+        }
+      }
+
+      // Update ball position (only for player1 in multiplayer mode)
+      if (!this.isMultiplayer || this.playerRole === "player1") {
+        this.ballX += this.ballSpeedX * deltaTimeFactor;
+        this.ballY += this.ballSpeedY * deltaTimeFactor;
+
+        // Bounce off top and bottom walls
+        if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
+          this.ballSpeedY = -this.ballSpeedY;
+        }
+
+        // Handle left paddle collision
+        if (
+          this.ballX - 10 * this.scale <= 30 * this.scale &&
+          this.ballX + 10 * this.scale >= 10 * this.scale &&
+          this.ballY >= this.paddleLeftY &&
+          this.ballY <= this.paddleLeftY + 80 * this.scale
+        ) {
+          // Reverse horizontal velocity
+          this.ballSpeedX = -this.ballSpeedX;
+          // Reposition ball to prevent re-collision
+          this.ballX = 30 * this.scale + 10 * this.scale; // Place right of paddle
+        }
+
+        // Handle right paddle collision
+        if (
+          this.ballX + 10 * this.scale >= (this.baseWidth - 30) * this.scale &&
+          this.ballX - 10 * this.scale <= (this.baseWidth - 10) * this.scale &&
+          this.ballY >= this.paddleRightY &&
+          this.ballY <= this.paddleRightY + 80 * this.scale
+        ) {
+          // Reverse horizontal velocity
+          this.ballSpeedX = -this.ballSpeedX;
+          // Reposition ball to prevent re-collision
+          this.ballX = (this.baseWidth - 30) * this.scale - 10 * this.scale; // Place left of paddle
+        }
+
+        // Handle scoring
+        if (this.ballX < 0) {
+          this.scoreRight++;
+          this.scoreRightElement.textContent = this.scoreRight.toString();
+          if (this.scoreRight >= 3) {
+            this.gameOver = true;
+            this.restartButton.style.display = "block";
+            const backButton = document.getElementById("backButton") as HTMLButtonElement;
+            if (backButton) backButton.style.display = "block";
+            this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Pong", {
+              player1Score: this.scoreLeft,
+              player2Score: this.scoreRight
+            });
+            if (this.onGameEnd) {
+              this.onGameEnd(this.playerRightName);
+            }
+          } else {
+            this.ballX = (this.baseWidth / 2) * this.scale;
+            this.ballY = (this.baseHeight / 2) * this.scale;
+            // Reset ball speed with slider value
+            const speedMultiplier = this.getSpeedMultiplier();
+            this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+            this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          }
+        } else if (this.ballX > this.canvas.width) {
+          this.scoreLeft++;
+          this.scoreLeftElement.textContent = this.scoreLeft.toString();
+          if (this.scoreLeft >= 3) {
+            this.gameOver = true;
+            this.restartButton.style.display = "block";
+            const backButton = document.getElementById("backButton") as HTMLButtonElement;
+            if (backButton) backButton.style.display = "block";
+            this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
+              player1Score: this.scoreLeft,
+              player2Score: this.scoreRight
+            });
+            if (this.onGameEnd) {
+              this.onGameEnd(this.playerLeftName);
+            }
+          } else {
+            this.ballX = (this.baseWidth / 2) * this.scale;
+            this.ballY = (this.baseHeight / 2) * this.scale;
+            // Reset ball speed with slider value
+            const speedMultiplier = this.getSpeedMultiplier();
+            this.ballSpeedX = -this.baseBallSpeedX * this.scale * speedMultiplier;
+            this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          }
+        }
+
+        // Player 1 broadcasts game state to Player 2
+        if (this.isMultiplayer && this.ws && this.playerRole === "player1") {
+          this.ws.send(JSON.stringify({
+            type: "gameState",
+            ballX: this.ballX / this.scale,
+            ballY: this.ballY / this.scale,
+            ballSpeedX: this.ballSpeedX / this.scale,
+            ballSpeedY: this.ballSpeedY / this.scale,
+            scoreLeft: this.scoreLeft,
+            scoreRight: this.scoreRight,
+            gameOver: this.gameOver,
+            winnerName: this.gameOver ? (this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName) : undefined
+          }));
         }
       }
     }
 
-    // Draw ball
+    // Draw ball (even for Player 2, since it receives ball position updates)
     this.ctx.beginPath();
     this.ctx.arc(this.ballX, this.ballY, 10 * this.scale, 0, Math.PI * 2);
     this.ctx.fillStyle = "white";

@@ -1,13 +1,29 @@
+version: '3.8'
+
 services:
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
     ports:
       - "80:80"
+    networks:
+      - app-network
     restart: unless-stopped
+    depends_on:
+      - backend
   backend:
     build:
       context: ./backend
     ports:
-      - "3000:3000"
+      - "4000:4000"
+    networks:
+      - app-network
+    environment:
+      - PORT=4000
+      - DB_PATH=/app/data/transcendence.db # Use this path for local development; at school, change to /goinfre/transcendence.db or /sgoinfre/transcendence.db
+      - BCRYPT_SALT_ROUNDS=10
+    # volumes:
+    #   - /goinfre:/goinfre # Uncomment this at school to map /goinfre or /sgoinfre as required by the subject (Page 6)
     restart: unless-stopped
+networks:
+  app-network:
+    driver: bridge

@@ -58,6 +58,17 @@ body {
   overscroll-behavior: none; /* Prevents pull-to-refresh on mobile */
 }
 
+.waiting-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.waiting-message.hidden {
+  display: none;
+}
+
 /* Background for post-login page */
 #app .post-login-page {
   background-image: url('/assets/peopleBackground.png');

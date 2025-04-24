@@ -603,7 +603,7 @@ private checkPowerUpCollision(): void {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, {
+          this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
           });
@@ -634,7 +634,7 @@ private checkPowerUpCollision(): void {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, {
+          this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
           });

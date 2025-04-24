@@ -455,9 +455,9 @@ export class SpaceBattle {
     this.restartButton.style.display = "block";
     const backButton = document.getElementById("backButton") as HTMLButtonElement;
     if (backButton) backButton.style.display = "block";
-    this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, {
-      player1Score: this.scoreLeft,
-      player2Score: this.scoreRight,
+    this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Space Battle", {
+        player1Score: this.scoreLeft,
+        player2Score: this.scoreRight,
     });
     if (this.onGameEnd) {
       this.onGameEnd(winnerName);

@@ -161,7 +161,7 @@ export class AIPong extends PongGame {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, {
+          this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "AI Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight
           });
@@ -185,7 +185,7 @@ export class AIPong extends PongGame {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, {
+          this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "AI Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight
           });
