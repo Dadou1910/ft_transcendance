@@ -458,7 +458,8 @@ export class SpaceBattle {
     this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Space Battle", {
         player1Score: this.scoreLeft,
         player2Score: this.scoreRight,
-    });
+        sessionToken: localStorage.getItem("sessionToken") // Add sessionToken
+      });
     if (this.onGameEnd) {
       this.onGameEnd(winnerName);
     }

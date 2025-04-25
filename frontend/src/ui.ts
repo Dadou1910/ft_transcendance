@@ -256,13 +256,21 @@ export function renderNameEntryForm(onSubmit: (player1: string, player2: string,
   `;
 }
 
-// Sets up the tournament name entry form with validation
-export function setupNameForm(onSubmit: (player1: string, player2: string, player3: string, player4: string) => void) {
+export function setupNameForm(
+  onSubmit: (player1: string, player2: string, player3: string, player4: string) => void,
+  loggedInUsername?: string
+) {
   const form = document.getElementById("nameEntryForm") as HTMLFormElement;
   const player1Input = document.getElementById("player1Input") as HTMLInputElement;
   const player2Input = document.getElementById("player2Input") as HTMLInputElement;
   const player3Input = document.getElementById("player3Input") as HTMLInputElement;
   const player4Input = document.getElementById("player4Input") as HTMLInputElement;
+
+  // Pre-fill the first player's field with the logged-in user's username and make it read-only
+  if (loggedInUsername && player1Input) {
+    player1Input.value = loggedInUsername;
+    player1Input.readOnly = true;
+  }
 
   // Validate and submit player names
   if (form && player1Input && player2Input && player3Input && player4Input) {

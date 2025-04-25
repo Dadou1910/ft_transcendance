@@ -60,4 +60,38 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
       return { error: 'Server error' };
     }
   });
+
+  fastify.get('/profile/me', async (request, reply) => {
+    try {
+      const user = request.user;
+      const matches = await new Promise<Match[]>((resolve, reject) => {
+        db.all('SELECT * FROM matches WHERE userId = ? OR opponentId = ?', [user.id, user.id], (err, rows: Match[]) => {
+          if (err) reject(err);
+          resolve(rows || []);
+        });
+      });
+
+      const settings = await new Promise<UserSettings | undefined>((resolve, reject) => {
+        db.get('SELECT backgroundColor, ballSpeed FROM user_settings WHERE userId = ?', [user.id], (err, row: UserSettings | undefined) => {
+          if (err) reject(err);
+          resolve(row);
+        });
+      });
+
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatarUrl: undefined,
+        },
+        matches,
+        settings: settings || {},
+      };
+    } catch (err) {
+      fastify.log.error('Current user profile fetch error:', err);
+      reply.code(500);
+      return { error: 'Server error' };
+    }
+  });
 }

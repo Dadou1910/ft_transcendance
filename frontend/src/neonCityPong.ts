@@ -490,8 +490,8 @@ private checkPowerUpCollision(): void {
       this.backgroundColorSelect.addEventListener("change", (e) => {
         this.backgroundColor = (e.target as HTMLSelectElement).value;
         console.log("Background color changed to:", this.backgroundColor);
-        if (this.userEmail) {
-          this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+        if (this.userName) {
+          this.statsManager.setUserSettings(this.userName, { backgroundColor: this.backgroundColor });
         }
         this.initBackgroundCanvas();
         // Removed this.draw() to prevent speed increase; animation loop will handle rendering
@@ -606,6 +606,7 @@ private checkPowerUpCollision(): void {
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
+            sessionToken: localStorage.getItem("sessionToken") // Add sessionToken
           });
           if (this.onGameEnd) {
             this.onGameEnd(this.playerRightName);
@@ -637,6 +638,7 @@ private checkPowerUpCollision(): void {
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
+            sessionToken: localStorage.getItem("sessionToken") // Add sessionToken
           });
           if (this.onGameEnd) {
             this.onGameEnd(this.playerLeftName);

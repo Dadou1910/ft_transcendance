@@ -36,6 +36,7 @@ export interface Tournament {
 export interface TournamentPlayer {
     tournamentId: number
     username: string
+    position?: number // Added to store 1st to 4th place (1 = 1st, 2 = 2nd, etc.)
 }
 
 export interface TournamentMatch {

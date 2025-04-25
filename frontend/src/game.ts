@@ -16,8 +16,8 @@ export class PongGame {
   protected settingsContainer: HTMLDivElement;
   // Manages game statistics
   protected statsManager: StatsManager;
-  // User email for settings persistence
-  protected userEmail: string | null;
+  // User name for settings persistence
+  protected userName: string | null;
   // Navigation callback
   protected navigate: (path: string) => void;
 
@@ -45,6 +45,12 @@ export class PongGame {
   protected opponentId: string | null = null;
   protected playerId: string;
   protected waitingMessage: HTMLDivElement | null = null;
+
+  // Tournament mode flag
+  protected isTournamentMode: boolean;
+
+  // Flag to prevent multiple onGameEnd triggers
+  protected hasTriggeredGameEnd: boolean = false;
 
   // Game constants
   protected paddleSpeed: number = 5;
@@ -80,10 +86,11 @@ export class PongGame {
     settingsMenuId: string,
     settingsContainerId: string,
     statsManager: StatsManager,
-    userEmail: string | null,
+    userName: string | null,
     onGameEnd?: (winnerName: string) => void,
     navigate?: (path: string) => void,
-    isMultiplayer: boolean = false // Add multiplayer flag
+    isMultiplayer: boolean = false,
+    isTournamentMode: boolean = false // Add tournament mode flag
   ) {
     this.playerLeftName = playerLeftName;
     this.playerRightName = playerRightName;
@@ -98,10 +105,11 @@ export class PongGame {
     this.settingsMenu = document.getElementById(settingsMenuId) as HTMLDivElement;
     this.settingsContainer = document.getElementById(settingsContainerId) as HTMLDivElement;
     this.statsManager = statsManager;
-    this.userEmail = userEmail;
+    this.userName = userName;
     this.onGameEnd = onGameEnd;
     this.navigate = navigate || (() => {});
     this.isMultiplayer = isMultiplayer;
+    this.isTournamentMode = isTournamentMode;
 
     // Generate a unique player ID
     this.playerId = `player_${Math.random().toString(36).substring(2, 9)}`;
@@ -140,7 +148,8 @@ export class PongGame {
 
   // Sets up WebSocket connection for multiplayer
   protected setupWebSocket(): void {
-    this.ws = new WebSocket("ws://localhost:4000/ws/game");
+    const sessionToken = localStorage.getItem("sessionToken");
+    this.ws = new WebSocket(`ws://localhost:4000/ws/game?token=${encodeURIComponent(sessionToken || '')}`);
 
     this.ws.onopen = () => {
       console.log("Connected to WebSocket server");
@@ -298,16 +307,16 @@ export class PongGame {
       // Update ball speed based on slider value
       this.ballSpeedX = this.baseBallSpeedX * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale * speedMultiplier;
       this.ballSpeedY = this.baseBallSpeedY * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale * speedMultiplier;
-      if (this.userEmail) {
-        this.statsManager.setUserSettings(this.userEmail, { ballSpeed: parseInt((e.target as HTMLInputElement).value) });
+      if (this.userName) {
+        this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt((e.target as HTMLInputElement).value) });
       }
     });
 
     if (this.backgroundColorSelect) {
       this.backgroundColorSelect.addEventListener("change", (e) => {
         this.backgroundColor = (e.target as HTMLSelectElement).value;
-        if (this.userEmail) {
-          this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+        if (this.userName) {
+          this.statsManager.setUserSettings(this.userName, { backgroundColor: this.backgroundColor });
         }
       });
     } else {
@@ -339,6 +348,7 @@ export class PongGame {
         this.scoreLeftElement.textContent = "0";
         this.scoreRightElement.textContent = "0";
         this.gameOver = false;
+        this.hasTriggeredGameEnd = false; // Reset for restart
         this.ballX = (this.baseWidth / 2) * this.scale;
         this.ballY = (this.baseHeight / 2) * this.scale;
         // Reset ball speed with slider value
@@ -483,11 +493,15 @@ export class PongGame {
             this.restartButton.style.display = "block";
             const backButton = document.getElementById("backButton") as HTMLButtonElement;
             if (backButton) backButton.style.display = "block";
-            this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Pong", {
-              player1Score: this.scoreLeft,
-              player2Score: this.scoreRight
-            });
-            if (this.onGameEnd) {
+            if (!this.isTournamentMode) { // Only record match if not in tournament mode
+              this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Pong", {
+                player1Score: this.scoreLeft,
+                player2Score: this.scoreRight,
+                sessionToken: localStorage.getItem("sessionToken")
+              });
+            }
+            if (this.onGameEnd && !this.hasTriggeredGameEnd) {
+              this.hasTriggeredGameEnd = true; // Prevent multiple triggers
               this.onGameEnd(this.playerRightName);
             }
           } else {
@@ -506,11 +520,15 @@ export class PongGame {
             this.restartButton.style.display = "block";
             const backButton = document.getElementById("backButton") as HTMLButtonElement;
             if (backButton) backButton.style.display = "block";
-            this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
-              player1Score: this.scoreLeft,
-              player2Score: this.scoreRight
-            });
-            if (this.onGameEnd) {
+            if (!this.isTournamentMode) { // Only record match if not in tournament mode
+              this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
+                player1Score: this.scoreLeft,
+                player2Score: this.scoreRight,
+                sessionToken: localStorage.getItem("sessionToken")
+              });
+            }
+            if (this.onGameEnd && !this.hasTriggeredGameEnd) {
+              this.hasTriggeredGameEnd = true; // Prevent multiple triggers
               this.onGameEnd(this.playerLeftName);
             }
           } else {

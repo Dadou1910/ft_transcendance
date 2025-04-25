@@ -58,26 +58,28 @@ export class StatsManager {
   private matchHistory: MatchRecord[] = [];
   private playerStats: Record<string, PlayerStats> = {};
   private users: User[] = [];
-  private currentUserEmail: string | null = null;
+  private sessionToken: string | null = null;
   private tournamentPlayers: Record<string, Player[]> = {};
   private tournamentMatches: Record<string, TournamentMatch[]> = {};
   private userSettings: Record<string, UserSettings> = {};
   private gameStats: Record<string, Record<string, GameStats>> = {};
 
   constructor() {
-    this.currentUserEmail = localStorage.getItem("currentUserEmail") || null;
+    this.sessionToken = localStorage.getItem("sessionToken") || null;
     this.loadInitialData();
   }
 
   private async loadInitialData(): Promise<void> {
     try {
-      if (this.currentUserEmail) {
-        console.log(`Attempting to fetch user profile for email: ${this.currentUserEmail}`);
-        const response = await fetch(`http://localhost:4000/auth/user-by-email?email=${encodeURIComponent(this.currentUserEmail)}`);
+      if (this.sessionToken) {
+        console.log(`Attempting to fetch user profile with session token`);
+        const response = await fetch(`http://localhost:4000/profile/me`, {
+          headers: { "Authorization": `Bearer ${this.sessionToken}` }
+        });
         if (response.ok) {
           const { user, matches, settings } = await response.json();
           console.log(`Fetched user data:`, user);
-          this.users = this.users.filter(u => u.email !== this.currentUserEmail);
+          this.users = this.users.filter(u => u.email !== user.email);
           this.users.push({
             username: user.name,
             email: user.email,
@@ -85,8 +87,8 @@ export class StatsManager {
             avatarUrl: user.avatarUrl,
           });
           this.matchHistory = matches.map((m: any) => ({
-            winner: m.userScore > m.opponentScore ? user.name : m.opponentId,
-            loser: m.userScore > m.opponentScore ? m.opponentId : user.name,
+            winner: m.userScore > m.opponentScore ? m.userName : m.opponentName,
+            loser: m.userScore > m.opponentScore ? m.opponentName : m.userName,
             timestamp: m.date,
           }));
           this.playerStats[user.name] = {
@@ -95,15 +97,15 @@ export class StatsManager {
             tournamentsWon: user.tournamentsWon,
           };
           if (settings) {
-            this.userSettings[user.email] = {
+            this.userSettings[user.name] = {
               backgroundColor: settings.backgroundColor,
               ballSpeed: settings.ballSpeed,
             };
           }
         } else {
-          console.warn(`Failed to fetch profile for ${this.currentUserEmail}. Status: ${response.status}`);
-          localStorage.removeItem("currentUserEmail");
-          this.currentUserEmail = null;
+          console.warn(`Failed to fetch profile with session token. Status: ${response.status}`);
+          // Do not clear the session token here; let the game routes handle authentication checks
+          // The token might still be valid for other endpoints, or the backend might be temporarily unavailable
         }
       }
       console.log("Initialized StatsManager with backend data");
@@ -137,28 +139,6 @@ export class StatsManager {
     const user = this.users.find((user) => user.email === email.toLowerCase());
     console.log("getUserByEmail:", { email, found: !!user });
     return user;
-  }
-
-  setCurrentUser(email: string): void {
-    console.log("Setting current user to:", email);
-    this.currentUserEmail = email.toLowerCase();
-    localStorage.setItem("currentUserEmail", this.currentUserEmail);
-  }
-
-  getCurrentUser(): User | null {
-    if (!this.currentUserEmail) {
-      console.log("No current user set");
-      return null;
-    }
-    const user = this.getUserByEmail(this.currentUserEmail);
-    console.log("getCurrentUser:", user ? user.email : "none");
-    return user || null;
-  }
-
-  logout(): void {
-    console.log("Logging out, clearing current user");
-    this.currentUserEmail = null;
-    localStorage.removeItem("currentUserEmail");
   }
 
   // --- Tournament Management ---
@@ -207,7 +187,7 @@ export class StatsManager {
   }
 
   // --- Match and Stats Management ---
-  async recordMatch(winner: string, loser: string, gameType: string, matchDetails?: { player1Score: number; player2Score: number }): Promise<void> {
+  async recordMatch(winner: string, loser: string, gameType: string, matchDetails: { player1Score: number; player2Score: number; sessionToken?: string | null }): Promise<void> {
     const match: MatchRecord = {
       winner,
       loser,
@@ -228,72 +208,58 @@ export class StatsManager {
     console.log("Recorded match locally:", { winner, loser, matchDetails });
   
     try {
-      let player1User: any = null;
-      let player2User: any = null;
-      let player1Name: string | null = null;
-      let player2Name: string | null = null;
+      // Fetch the current user
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (!sessionToken) {
+        throw new Error("No session token available. Please log in again.");
+      }
   
-      const currentUser = await this.getCurrentUser();
+      const userResponse = await fetch(`http://localhost:4000/profile/me`, {
+        headers: { "Authorization": `Bearer ${sessionToken}` }
+      });
+      if (!userResponse.ok) {
+        throw new Error("Failed to fetch current user. Please log in again.");
+      }
+      const { user } = await userResponse.json();
+      const loggedInUsername = user.name;
   
-      // Determine Player 1 (match initiator) and Player 2 (opponent)
-      // In game.ts, Player 1 is the left player (e.g., "dadou"), Player 2 is the right player (e.g., "Player 2")
-      if (winner === "Player 1" || loser === "Player 1") {
-        // Player 1 is explicitly mentioned
-        player1Name = "Player 1";
-        player2Name = winner === "Player 1" ? loser : winner;
-      } else if (currentUser && (winner === currentUser.username || loser === currentUser.username)) {
-        // Player names are usernames, and one matches the logged-in user (assume Player 1 is the logged-in user)
-        player1Name = currentUser.username;
-        player2Name = winner === currentUser.username ? loser : winner;
-      } else {
-        // Fallback: Assume loser is Player 1 if winner is "Player 2", or winner is Player 1 if loser is "Player 2"
-        // This aligns with game.ts: recordMatch(playerRightName, playerLeftName) if Player 2 wins
-        if (winner === "Player 2") {
-          player1Name = loser; // e.g., "dadou"
-          player2Name = winner; // "Player 2"
-        } else if (loser === "Player 2") {
-          player1Name = winner; // e.g., "dadou"
-          player2Name = loser; // "Player 2"
+      console.log("Fetched logged-in user:", loggedInUsername);
+  
+      // Simplify logic: logged-in user is always userName
+      let userName: string = loggedInUsername;
+      let opponentName: string;
+      let userScore: number;
+      let opponentScore: number;
+  
+      // In AIPong, playerLeftName is the user, playerRightName is AI Opponent
+      if (gameType === "AI Pong") {
+        // Since AIPong calls recordMatch(winner, loser, ...):
+        // - If winner is AI Opponent, loser is the user
+        // - If loser is AI Opponent, winner is the user
+        if (winner === "AI Opponent") {
+          opponentName = "AI Opponent";
+          userScore = matchDetails.player1Score; // scoreLeft (user)
+          opponentScore = matchDetails.player2Score; // scoreRight (AI)
         } else {
-          // Neither player is "Player 1" or "Player 2", default to winner as Player 1
-          player1Name = winner;
-          player2Name = loser;
+          opponentName = "AI Opponent";
+          userScore = matchDetails.player1Score; // scoreLeft (user)
+          opponentScore = matchDetails.player2Score; // scoreRight (AI)
+        }
+      } else {
+        // For other game modes (Pong, Neon City Pong, Space Battle)
+        // Assume playerLeftName is the user (consistent with initialization)
+        if (winner === loggedInUsername) {
+          opponentName = loser;
+          userScore = matchDetails.player1Score;
+          opponentScore = matchDetails.player2Score;
+        } else {
+          opponentName = winner;
+          userScore = matchDetails.player1Score;
+          opponentScore = matchDetails.player2Score;
         }
       }
-  
-      // Replace "Player 1" with the logged-in user's username if available
-      if (player1Name === "Player 1" && currentUser) {
-        player1Name = currentUser.username;
-      }
-  
-      // Fetch user data for Player 1 (if it's a registered username)
-      if (player1Name && player1Name !== "Player 1" && player1Name !== "Player 2") {
-        const player1Response = await fetch(`http://localhost:4000/profile/${encodeURIComponent(player1Name)}`);
-        if (player1Response.ok) {
-          player1User = (await player1Response.json()).user;
-        }
-      }
-  
-      // Fetch user data for Player 2 (if it's a registered username)
-      if (player2Name && player2Name !== "Player 1" && player2Name !== "Player 2") {
-        const player2Response = await fetch(`http://localhost:4000/profile/${encodeURIComponent(player2Name)}`);
-        if (player2Response.ok) {
-          player2User = (await player2Response.json()).user;
-        }
-      }
-  
-      const userId = player1User?.id || null; // Player 1 (match initiator, e.g., dadou)
-      const opponentId = player2User?.id || null; // Player 2 (opponent, e.g., Player 2)
-      const userName = player1Name;
-      const opponentName = player2Name;
-  
-      // Assign scores based on fixed roles: user is Player 1, opponent is Player 2
-      const userScore = matchDetails?.player1Score || 0; // Player 1's score (e.g., dadou)
-      const opponentScore = matchDetails?.player2Score || 0; // Player 2's score (e.g., Player 2)
   
       console.log("Sending to /match:", {
-        userId,
-        opponentId,
         userName,
         opponentName,
         userScore,
@@ -301,12 +267,14 @@ export class StatsManager {
         gameType,
       });
   
+      const sessionTokenForHeader = matchDetails.sessionToken ?? null;
       const matchResponse = await fetch("http://localhost:4000/match", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(sessionTokenForHeader ? { "Authorization": `Bearer ${sessionTokenForHeader}` } : {})
+        },
         body: JSON.stringify({
-          userId,
-          opponentId,
           userName,
           opponentName,
           userScore,
@@ -322,7 +290,7 @@ export class StatsManager {
         throw new Error(responseData.error || "Failed to record match");
       }
   
-      console.log("Match recorded in backend:", { userId, opponentId, userName, opponentName, userScore, opponentScore, gameType });
+      console.log("Match recorded in backend:", { userName, opponentName, userScore, opponentScore, gameType });
     } catch (error) {
       console.error("Error recording match in backend:", error);
       alert("Failed to record match: " + (error instanceof Error ? error.message : "Unknown error"));
@@ -374,23 +342,30 @@ export class StatsManager {
     return this.playerStats[player] || null;
   }
 
-  // --- User Settings Management ---
-  async setUserSettings(email: string, settings: Partial<UserSettings>): Promise<void> {
-    if (!this.userSettings[email]) {
-      this.userSettings[email] = {};
+  getCurrentUser(): User | null {
+    if (!this.sessionToken) {
+      console.log("No session token set");
+      return null;
     }
-    this.userSettings[email] = { ...this.userSettings[email], ...settings };
-    console.log("Set user settings locally:", { email, settings });
+    const user = this.users[0]; // Assuming the first user is the current one after loadInitialData
+    console.log("getCurrentUser:", user ? user.email : "none");
+    return user || null;
+  }
+
+  // --- User Settings Management ---
+  async setUserSettings(username: string, settings: Partial<UserSettings>): Promise<void> {
+    if (!this.userSettings[username]) {
+      this.userSettings[username] = {};
+    }
+    this.userSettings[username] = { ...this.userSettings[username], ...settings };
+    console.log("Set user settings locally:", { username, settings });
 
     try {
-      // Find the user by email to get the username
-      const user = this.getUserByEmail(email);
-      if (!user) {
-        throw new Error("User not found locally");
-      }
-
+      const sessionToken = localStorage.getItem("sessionToken");
       // Fetch user ID by username using /profile/:id
-      const userResponse = await fetch(`http://localhost:4000/profile/${encodeURIComponent(user.username)}`);
+      const userResponse = await fetch(`http://localhost:4000/profile/${encodeURIComponent(username)}`, {
+        headers: { "Authorization": `Bearer ${sessionToken}` }
+      });
       if (!userResponse.ok) {
         throw new Error("User not found in backend");
       }
@@ -399,9 +374,11 @@ export class StatsManager {
       // Send settings to backend
       const settingsResponse = await fetch("http://localhost:4000/settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`
+        },
         body: JSON.stringify({
-          userId: backendUser.id,
           backgroundColor: settings.backgroundColor,
           ballSpeed: settings.ballSpeed,
         }),
@@ -412,14 +389,13 @@ export class StatsManager {
         throw new Error(data.error || "Failed to save settings");
       }
 
-      console.log("Settings saved to backend:", { userId: backendUser.id, settings });
+      console.log("Settings saved to backend:", { username: backendUser.name, settings });
     } catch (error) {
       console.error("Error saving settings to backend:", error);
     }
   }
 
-  getUserSettings(email: string): UserSettings | null {
-    return this.userSettings[email] || null;
+  getUserSettings(username: string): UserSettings | null {
+    return this.userSettings[username] || null;
   }
 }
-

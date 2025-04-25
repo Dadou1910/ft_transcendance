@@ -9,7 +9,8 @@ import { settingsRoutes } from './routes/settings';
 import { matchRoutes } from './routes/match';
 import { tournamentRoutes } from './routes/tournament';
 import { websocketRoutes } from './routes/websocket';
-import { statsRoutes } from './routes/stats'; // Add this import
+import { statsRoutes } from './routes/stats';
+import { sessionMiddleware } from './routes/middleware';
 
 async function buildServer() {
   const fastify = Fastify({ logger: true });
@@ -22,6 +23,8 @@ async function buildServer() {
 
   const db = await initializeDatabase(fastify);
 
+  await sessionMiddleware(fastify, db);
+
   // Register routes
   await authRoutes(fastify, db);
   await profileRoutes(fastify, db);
@@ -29,7 +32,7 @@ async function buildServer() {
   await matchRoutes(fastify, db);
   await tournamentRoutes(fastify, db);
   await websocketRoutes(fastify);
-  await statsRoutes(fastify, db); // Add this line
+  await statsRoutes(fastify, db);
 
   fastify.get('/', async (request, reply) => {
     return { status: 'Server is running' };

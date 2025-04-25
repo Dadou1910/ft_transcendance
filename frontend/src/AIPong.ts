@@ -163,7 +163,8 @@ export class AIPong extends PongGame {
           if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "AI Pong", {
             player1Score: this.scoreLeft,
-            player2Score: this.scoreRight
+            player2Score: this.scoreRight,
+            sessionToken: localStorage.getItem("sessionToken") // Add sessionToken
           });
           if (this.onGameEnd) {
             this.onGameEnd(this.playerRightName);
@@ -187,7 +188,8 @@ export class AIPong extends PongGame {
           if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "AI Pong", {
             player1Score: this.scoreLeft,
-            player2Score: this.scoreRight
+            player2Score: this.scoreRight,
+            sessionToken: localStorage.getItem("sessionToken") // Add sessionToken
           });
           if (this.onGameEnd) {
             this.onGameEnd(this.playerLeftName);

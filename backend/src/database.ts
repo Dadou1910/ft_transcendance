@@ -93,6 +93,7 @@ export async function initializeDatabase(fastify: FastifyInstance) {
         CREATE TABLE IF NOT EXISTS tournament_players (
           tournamentId INTEGER NOT NULL,
           username TEXT NOT NULL,
+          position INTEGER,
           PRIMARY KEY (tournamentId, username),
           FOREIGN KEY(tournamentId) REFERENCES tournaments(id) ON DELETE CASCADE
         );
@@ -117,6 +118,22 @@ export async function initializeDatabase(fastify: FastifyInstance) {
       `, (err) => {
         if (err) reject(err);
         fastify.log.info('Tournament_matches table created');
+        resolve();
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          token TEXT PRIMARY KEY,
+          userId INTEGER NOT NULL,
+          createdAt TEXT NOT NULL,
+          expiresAt TEXT NOT NULL,
+          FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `, (err) => {
+        if (err) reject(err);
+        fastify.log.info('Sessions table created');
         resolve();
       });
     });
