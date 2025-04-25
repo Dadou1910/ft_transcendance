@@ -34,9 +34,9 @@
 
   # HTTPS connection
 - [x] Enable HTTPS connection for all aspects (e.g., use wss instead of ws)
-- [ ] Passwords hashed in the database
-- [ ] Any password stored in the database must be hashed
-- [ ] Use a strong password hashing algorithm
+- [x] Passwords hashed in the database
+- [x] Any password stored in the database must be hashed
+- [x] Use a strong password hashing algorithm
 - [ ] Credentials, API keys, env variables saved locally in a .env file and ignored by git
 
   # No unhandled JavaScript errors in the latest Mozilla Firefox version
@@ -58,8 +58,8 @@
 - [x] Frontend developed adhering to SPA requirements
 
   # Database: SQLite
-- [ ] Use SQLite for all database instances
-- [ ] Ensure data consistency and compatibility across project components
+- [x] Use SQLite for all database instances
+- [x] Ensure data consistency and compatibility across project components
 
 ## ✅ Gameplay and User Experience Module
 
