@@ -1,14 +1,12 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyEnv from './config';
-import fastifyWebsocket from '@fastify/websocket';
 import { initializeDatabase } from './database';
 import { authRoutes } from './routes/auth';
 import { profileRoutes } from './routes/profile';
 import { settingsRoutes } from './routes/settings';
 import { matchRoutes } from './routes/match';
 import { tournamentRoutes } from './routes/tournament';
-import { websocketRoutes } from './routes/websocket';
 import { statsRoutes } from './routes/stats';
 import { sessionMiddleware } from './routes/middleware';
 
@@ -18,8 +16,6 @@ async function buildServer() {
   await fastify.register(fastifyEnv);
 
   await fastify.register(cors, { origin: '*' });
-
-  await fastify.register(fastifyWebsocket);
 
   const db = await initializeDatabase(fastify);
 
@@ -31,7 +27,6 @@ async function buildServer() {
   await settingsRoutes(fastify, db);
   await matchRoutes(fastify, db);
   await tournamentRoutes(fastify, db);
-  await websocketRoutes(fastify);
   await statsRoutes(fastify, db);
 
   fastify.get('/', async (request, reply) => {

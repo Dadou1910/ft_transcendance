@@ -1,3 +1,5 @@
+import { PlayerStats, MatchRecord, GameStats } from './stats';
+
 // Manages UI rendering and setup for the Pong Transcendence game
 // Includes welcome pages, game view, forms, and tournament end screen
 
@@ -61,9 +63,9 @@ export function renderLoggedInWelcomePage(
         <h2 class="sidebar-username">${username}</h2>
         <p class="sidebar-email">${email}</p>
         <div class="sidebar-links">
-          <a class="sidebar-link">Settings</a>
+          <a id="settingsLink" class="sidebar-link">Settings</a>
           <a class="sidebar-link">Leaderboard</a>
-          <a class="sidebar-link">Profile</a>
+          <a id="profileLink" class="sidebar-link">Profile</a>
           <a id="logoutLink" class="sidebar-link">Logout</a>
         </div>
       </div>
@@ -111,89 +113,60 @@ export function setupLoggedInWelcomePage(
   onLogout: () => void,
   username: string,
   onPlayMatch: () => void,
-  onPlayTournament?: () => void,
-  onPlayMultiplayer?: () => void // Add callback for multiplayer
+  onPlayTournament: () => void,
+  onSettings: () => void,
+  navigate: (path: string) => void
 ) {
-  const logoutLink = document.getElementById("logoutLink") as HTMLAnchorElement;
-  const playMatchButton = document.getElementById("playMatchButton") as HTMLButtonElement;
-  const playTournamentButton = document.getElementById("playTournamentButton") as HTMLButtonElement;
-  const playMultiplayerButton = document.getElementById("playMultiplayerButton") as HTMLButtonElement;
-  const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
-  const toggleSidebarButton = document.getElementById("toggleSidebarButton") as HTMLButtonElement;
-  const sidebar = document.getElementById("sidebar") as HTMLDivElement;
+  const logoutLink = document.getElementById("logoutLink");
+  const settingsLink = document.getElementById("settingsLink");
+  const profileLink = document.getElementById("profileLink");
+  const playMatchButton = document.getElementById("playMatchButton");
+  const playTournamentButton = document.getElementById("playTournamentButton");
+  const playMultiplayerButton = document.getElementById("playMultiplayerButton");
+  const gameModeSelect = document.getElementById("gameModeSelect");
+  const toggleSidebarButton = document.getElementById("toggleSidebarButton");
+  const sidebar = document.getElementById("sidebar");
 
-  // Attach logout event listener
   if (logoutLink) {
-    console.log("Attaching listener to logout link");
     logoutLink.addEventListener("click", (e) => {
       e.preventDefault();
-      console.log("Logout link clicked, calling onLogout");
-      try {
-        onLogout();
-      } catch (error) {
-        console.error("Error in onLogout:", error);
-      }
+      onLogout();
     });
-  } else {
-    console.error("Logout link not found!");
   }
 
-  // Attach play match event listener
+  if (settingsLink) {
+    settingsLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      onSettings();
+    });
+  }
+
+  if (profileLink) {
+    profileLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      navigate("/profile");
+    });
+  }
+
   if (playMatchButton && gameModeSelect) {
-    console.log("Attaching listener to play match button");
     playMatchButton.addEventListener("click", (e) => {
       e.preventDefault();
-      console.log("Play Match button clicked, calling onPlayMatch with mode:", gameModeSelect.value);
-      try {
-        onPlayMatch();
-      } catch (error) {
-        console.error("Error in onPlayMatch:", error);
-      }
+      onPlayMatch();
     });
-  } else {
-    console.error("Play Match button or gameModeSelect not found!");
   }
 
-  // Attach play tournament event listener
-  if (playTournamentButton && onPlayTournament) {
-    console.log("Attaching listener to play tournament button");
+  if (playTournamentButton) {
     playTournamentButton.addEventListener("click", (e) => {
       e.preventDefault();
-      console.log("Play Tournament button clicked, calling onPlayTournament");
-      try {
-        onPlayTournament();
-      } catch (error) {
-        console.error("Error in onPlayTournament:", error);
-      }
+      onPlayTournament();
     });
-  } else {
-    console.error("Play Tournament button or callback not found!");
   }
 
-  // Attach play multiplayer event listener
-  if (playMultiplayerButton && onPlayMultiplayer) {
-    console.log("Attaching listener to play multiplayer button");
-    playMultiplayerButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      console.log("Play Multiplayer button clicked, calling onPlayMultiplayer");
-      try {
-        onPlayMultiplayer();
-      } catch (error) {
-        console.error("Error in onPlayMultiplayer:", error);
-      }
-    });
-  } else {
-    console.error("Play Multiplayer button or callback not found!");
-  }
-
-  // Attach sidebar toggle event listener
   if (toggleSidebarButton && sidebar) {
-    console.log("Attaching listener to toggle sidebar button");
     toggleSidebarButton.addEventListener("click", () => {
       sidebar.classList.toggle("visible");
     });
 
-    // Close sidebar when clicking outside
     document.addEventListener("click", (e) => {
       const target = e.target as Node;
       if (
@@ -204,8 +177,6 @@ export function setupLoggedInWelcomePage(
         sidebar.classList.remove("visible");
       }
     });
-  } else {
-    console.error("Toggle sidebar button or sidebar not found!");
   }
 }
 
@@ -298,7 +269,7 @@ export function setupNameForm(
 // Section 4: Game Screen
 // ------------------------------------------
 // Renders the game view with player names and optional round number
-export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number, isMultiplayer: boolean = false): string {
+export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number): string {
   const leftDisplayName = playerLeftName.trim() || "Player 1";
   const rightDisplayName = playerRightName.trim() || "Player 2";
   return `
@@ -314,11 +285,6 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
       </div>
       <div class="game-area flex gap-5 items-start relative">
         <canvas id="pongCanvas" width="800" height="400" class="pong-canvas"></canvas>
-        ${isMultiplayer ? `
-          <div id="waitingMessage" class="waiting-message absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <p class="text-white text-2xl">Waiting for opponent...</p>
-          </div>
-        ` : ''}
         <div id="settingsContainer" class="relative w-10">
           <button id="settingsButton" class="settings-button"></button>
           <div id="settingsMenu" class="settings-menu">
@@ -618,4 +584,282 @@ export function setupTournamentEnd(onStartAgain: () => void, onBack: () => void)
   } else {
     console.error("Back button not found!");
   }
+}
+
+export function renderSettingsPage(
+  username: string,
+  email: string
+): string {
+  return `
+    <div class="settings-page">
+      <div class="settings-header">
+        <h1>Account Settings</h1>
+        <p>Manage your profile and preferences</p>
+      </div>
+      
+      <div class="settings-content">
+        <div class="settings-section">
+          <h2>Profile Information</h2>
+          <div class="settings-option">
+            <label for="username">Username</label>
+            <input type="text" id="username" class="text-input" value="${username || ''}" />
+          </div>
+          <div class="settings-option">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" class="text-input" value="${email || ''}" />
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2>Security</h2>
+          <div class="settings-option">
+            <label for="currentPassword">Current Password</label>
+            <input type="password" id="currentPassword" class="text-input" />
+          </div>
+          <div class="settings-option">
+            <label for="newPassword">New Password</label>
+            <input type="password" id="newPassword" class="text-input" />
+          </div>
+          <div class="settings-option">
+            <label for="confirmPassword">Confirm New Password</label>
+            <input type="password" id="confirmPassword" class="text-input" />
+          </div>
+        </div>
+
+        <div id="settingsError" class="settings-error"></div>
+
+        <div class="settings-actions">
+          <button id="backButton" class="secondary-button">Back</button>
+          <button id="saveButton" class="primary-button">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function setupSettingsPage(
+  onSave: (updates: { username?: string; email?: string; currentPassword?: string; newPassword?: string }) => void,
+  onBack: () => void
+): void {
+  const usernameInput = document.getElementById("username") as HTMLInputElement;
+  const emailInput = document.getElementById("email") as HTMLInputElement;
+  const currentPasswordInput = document.getElementById("currentPassword") as HTMLInputElement;
+  const newPasswordInput = document.getElementById("newPassword") as HTMLInputElement;
+  const confirmPasswordInput = document.getElementById("confirmPassword") as HTMLInputElement;
+  const saveButton = document.getElementById("saveButton");
+  const backButton = document.getElementById("backButton");
+  const errorDiv = document.getElementById("settingsError");
+
+  if (saveButton) {
+    saveButton.addEventListener("click", () => {
+      // Clear previous error
+      if (errorDiv) errorDiv.textContent = "";
+
+      const updates: { username?: string; email?: string; currentPassword?: string; newPassword?: string } = {};
+      let hasChanges = false;
+
+      // Collect changes
+      if (usernameInput && usernameInput.value.trim() !== usernameInput.defaultValue) {
+        updates.username = usernameInput.value.trim();
+        hasChanges = true;
+      }
+
+      if (emailInput && emailInput.value.trim() !== emailInput.defaultValue) {
+        updates.email = emailInput.value.trim();
+        hasChanges = true;
+      }
+
+      // Handle password change
+      if (currentPasswordInput?.value && newPasswordInput?.value) {
+        if (newPasswordInput.value.length < 8) {
+          if (errorDiv) errorDiv.textContent = "New password must be at least 8 characters long";
+          return;
+        }
+
+        if (newPasswordInput.value !== confirmPasswordInput?.value) {
+          if (errorDiv) errorDiv.textContent = "New passwords do not match";
+          return;
+        }
+
+        updates.currentPassword = currentPasswordInput.value;
+        updates.newPassword = newPasswordInput.value;
+        hasChanges = true;
+      } else if (currentPasswordInput?.value || newPasswordInput?.value || confirmPasswordInput?.value) {
+        if (errorDiv) errorDiv.textContent = "Please fill in all password fields to change password";
+        return;
+      }
+
+      if (!hasChanges) {
+        if (errorDiv) errorDiv.textContent = "No changes made";
+        return;
+      }
+
+      onSave(updates);
+    });
+  }
+
+  if (backButton) {
+    backButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      onBack();
+    });
+  }
+}
+
+// ------------------------------------------
+// Section 8: Profile Dashboard
+// ------------------------------------------
+export function renderProfilePage(
+  username: string,
+  email: string,
+  avatarUrl: string | undefined,
+  playerStats: PlayerStats,
+  matchHistory: MatchRecord[],
+  gameStats: Record<string, GameStats>
+): string {
+  // Calculate total games and win rate from all game types combined
+  let totalWins = 0;
+  let totalLosses = 0;
+  
+  // Use playerStats for the overall stats (from database)
+  totalWins = playerStats.wins;
+  totalLosses = playerStats.losses;
+  
+  const totalGames = totalWins + totalLosses;
+  const winRate = totalGames > 0
+    ? ((totalWins / totalGames) * 100).toFixed(1)
+    : "0.0";
+
+  // Get the last 5 matches
+  const recentMatches = matchHistory.slice(0, 5);
+
+  return `
+    <div class="profile-page">
+      <div class="profile-header" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
+        <div class="profile-user-info">
+          <img
+            src="${avatarUrl || '/assets/default-avatar.png'}"
+            class="profile-avatar"
+          />
+          <div class="profile-text-info">
+            <h1 class="profile-username">${username}</h1>
+            <p class="profile-email">${email}</p>
+          </div>
+        </div>
+        <div class="profile-quick-stats">
+          <div class="quick-stat">
+            <span class="stat-value">${winRate}%</span>
+            <span class="stat-label">Overall Win Rate</span>
+          </div>
+          <div class="quick-stat">
+            <span class="stat-value">${playerStats.tournamentsWon}</span>
+            <span class="stat-label">Tournaments Won</span>
+          </div>
+          <div class="quick-stat">
+            <span class="stat-value">${totalGames}</span>
+            <span class="stat-label">Total Games</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-content">
+        <div class="profile-section game-stats-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
+          <h2>Current Session Statistics</h2>
+          <div class="game-stats-grid">
+            ${Object.entries(gameStats).map(([gameType, stats]) => `
+              <div class="game-type-stats">
+                <h3>${gameType}</h3>
+                <canvas id="${gameType.replace(/\s+/g, '-').toLowerCase()}-chart" width="200" height="250"></canvas>
+                <div class="game-type-details">
+                  <p>Games Played: ${stats.gamesPlayed}</p>
+                  <p>Wins: ${stats.wins}</p>
+                  <p>Losses: ${stats.losses}</p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="profile-section match-history-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
+          <h2>Recent Matches</h2>
+          <div class="match-history-list">
+            ${recentMatches.length > 0 ? recentMatches.map(match => `
+              <div class="match-history-item ${match.winner === username ? 'victory' : 'defeat'}">
+                <div class="match-result">${match.winner === username ? 'Victory' : 'Defeat'}</div>
+                <div class="match-players">
+                  <span class="${match.winner === username ? 'winner' : 'loser'}">${username}</span>
+                  <span class="vs">vs</span>
+                  <span class="${match.winner === username ? 'loser' : 'winner'}">${match.winner === username ? match.loser : match.winner}</span>
+                </div>
+                <div class="match-date">${new Date(match.timestamp).toLocaleDateString()}</div>
+              </div>
+            `).join('') : `
+              <div class="no-matches">No recent matches found</div>
+            `}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function setupGameChart(canvas: HTMLCanvasElement, gameType: string): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Get game stats from the canvas's parent element
+  const statsContainer = canvas.closest('.game-type-stats');
+  if (!statsContainer) return;
+
+  const wins = parseInt(statsContainer.querySelector('.game-type-details p:nth-child(2)')?.textContent?.split(': ')[1] || '0');
+  const losses = parseInt(statsContainer.querySelector('.game-type-details p:nth-child(3)')?.textContent?.split(': ')[1] || '0');
+
+  // Draw pie chart
+  const total = wins + losses;
+  const startAngle = 0;
+  const winAngle = total > 0 ? (wins / total) * Math.PI * 2 : 0;
+
+  // Clear the canvas first
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw wins
+  ctx.beginPath();
+  ctx.fillStyle = '#4CAF50';
+  ctx.moveTo(100, 100);
+  ctx.arc(100, 100, 80, startAngle, startAngle + winAngle);
+  ctx.lineTo(100, 100);
+  ctx.fill();
+
+  // Draw losses
+  ctx.beginPath();
+  ctx.fillStyle = '#f44336';
+  ctx.moveTo(100, 100);
+  ctx.arc(100, 100, 80, startAngle + winAngle, startAngle + Math.PI * 2);
+  ctx.lineTo(100, 100);
+  ctx.fill();
+
+  // Add only the game type name
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(gameType, 100, 210);
+}
+
+export function setupProfilePage(onBack: () => void): void {
+  // Add event listener for back button if it exists
+  const backButton = document.getElementById("backButton");
+  if (backButton) {
+    backButton.addEventListener("click", onBack);
+  }
+
+  // Setup charts for each game type
+  const gameTypes = ["Pong", "Neon City Pong", "AI Pong", "Space Battle"];
+  gameTypes.forEach(gameType => {
+    const canvasId = `${gameType.replace(/\s+/g, '-').toLowerCase()}-chart`;
+    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    if (canvas) {
+      setupGameChart(canvas, gameType);
+    }
+  });
 }

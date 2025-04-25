@@ -1,5 +1,3 @@
-import { SocketStream } from "@fastify/websocket"; // Import SocketStream for Fastify WebSocket connections
-
 export interface User {
     id?: number
     name: string
@@ -18,13 +16,13 @@ export interface UserSettings {
 
 export interface Match {
     id?: number;
-    userId?: number; // Now nullable
-    opponentId?: number; // Now nullable
-    userName: string; // New field
-    opponentName: string; // New field
+    userId?: number;
+    opponentId?: number;
+    userName: string;
+    opponentName: string;
     userScore: number;
     opponentScore: number;
-    gameType: string; // New field
+    gameType: string;
     date: string;
 }
 
@@ -36,7 +34,7 @@ export interface Tournament {
 export interface TournamentPlayer {
     tournamentId: number
     username: string
-    position?: number // Added to store 1st to 4th place (1 = 1st, 2 = 2nd, etc.)
+    position?: number
 }
 
 export interface TournamentMatch {
@@ -46,15 +44,4 @@ export interface TournamentMatch {
     player1: string
     player2: string
     winner?: string
-}
-
-export interface GameSession {
-    player1: { socket: SocketStream; playerId: string }
-    player2: { socket: SocketStream; playerId: string }
-}
-
-export interface WebSocketClient {
-    socket: SocketStream;
-    playerId?: string;
-    gameSession?: GameSession;
 }

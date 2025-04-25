@@ -301,7 +301,7 @@ export class SpaceBattle {
     if (backButton) {
       backButton.addEventListener("click", () => {
         this.cleanup();
-        this.navigate("/welcome");
+        this.navigate("/");
       });
     } else {
       console.error("Back button not found!");

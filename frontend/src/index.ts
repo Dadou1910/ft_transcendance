@@ -16,6 +16,8 @@ import {
   setupLoggedInWelcomePage,
   renderTournamentEnd,
   setupTournamentEnd,
+  renderProfilePage,
+  setupProfilePage,
 } from "./ui.js";
 // Imports Tournament class for managing tournament logic
 import { Tournament } from "./tournament.js";
@@ -30,7 +32,9 @@ import { SpaceBattle } from "./spaceBattle.js";
 // Imports Bracket class for tournament bracket management
 import { Bracket } from "./bracket.js";
 // Imports StatsManager and Player type for player statistics
-import { StatsManager, Player } from "./stats.js";
+import { StatsManager, Player, GameStats, MatchRecord } from "./stats.js";
+// Imports SettingsView class
+import { SettingsView } from "./settings.js";
 
 // Initializes StatsManager for tracking player stats
 const statsManager = new StatsManager();
@@ -76,8 +80,20 @@ async function getCurrentUser(): Promise<{ id: number; username: string; email: 
 }
 
 // Defines root route ("/")
-router.addRoute("/", () => {
-  return "";
+router.addRoute("/", async () => {
+  const currentUser = await getCurrentUser();
+  if (currentUser) {
+    return renderLoggedInWelcomePage(
+      currentUser.username,
+      currentUser.email,
+      currentUser.avatarUrl
+    );
+  } else {
+    return renderWelcomePage(
+      () => router.navigate("/register"),
+      () => router.navigate("/login")
+    );
+  }
 });
 
 // Defines welcome route ("/welcome")
@@ -307,111 +323,102 @@ async function handleGameRoute(): Promise<string> {
       return;
     }
     // In the /game route's setTimeout callback
-gameInstance = new PongGame(
-  left,
-  right,
-  "pongCanvas",
-  "speedSlider",
-  "backgroundColorSelect",
-  "scoreLeft",
-  "scoreRight",
-  "restartButton",
-  "settingsButton",
-  "settingsMenu",
-  "settingsContainer",
-  statsManager,
-  currentUser.username,
-  isTournamentMode ? async (winnerName: string) => {
-    if (!isTournamentMode) {
-      console.log("Tournament mode ended, skipping onGameEnd");
-      return;
-    }
-    if (bracketInstance && backendTournamentId) {
-      const match = bracketInstance.getNextMatch();
-      if (match) {
-        const winnerId = match.player1.name === winnerName ? match.player1.id : match.player2.id;
-        try {
-          const sessionToken = localStorage.getItem("sessionToken");
-          if (!sessionToken) throw new Error("User not logged in");
+    const onGameEnd = isTournamentMode ? async (winnerName: string) => {
+      if (!isTournamentMode) {
+        console.log("Tournament mode ended, skipping onGameEnd");
+        return;
+      }
+      if (bracketInstance && backendTournamentId) {
+        const match = bracketInstance.getNextMatch();
+        if (match) {
+          const winnerId = match.player1.name === winnerName ? match.player1.id : match.player2.id;
+          try {
+            const sessionToken = localStorage.getItem("sessionToken");
+            if (!sessionToken) throw new Error("User not logged in");
 
-          // Fetch the logged-in user's profile
-          const currentUserResponse = await fetch(`http://localhost:4000/profile/me`, {
-            headers: { "Authorization": `Bearer ${sessionToken}` }
-          });
-          if (!currentUserResponse.ok) throw new Error("Failed to fetch logged-in user");
+            // Get player names directly from the match
+            let player1Name = match.player1.name;
+            let player2Name = match.player2.name;
 
-          // Get player names directly from the match (TournamentMatch)
-          let player1Name = match.player1.name;
-          let player2Name = match.player2.name;
+            // Validate player names
+            if (!player1Name?.trim() || !player2Name?.trim()) {
+              throw new Error("Player names cannot be empty or whitespace-only");
+            }
 
-          // Validate player names to ensure they're not empty or whitespace-only
-          if (!player1Name?.trim() || !player2Name?.trim()) {
-            throw new Error("Player names cannot be empty or whitespace-only");
+            // Ensure required fields are present
+            if (!match.tournamentId || match.roundNumber == null) {
+              throw new Error("Tournament match is missing required fields");
+            }
+
+            // Create tournament match
+            const matchResponse = await fetch("http://localhost:4000/tournament/match", {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${sessionToken}`
+              },
+              body: JSON.stringify({
+                tournamentId: backendTournamentId,
+                roundNumber: match.roundNumber,
+                player1: player1Name,
+                player2: player2Name,
+              }),
+            });
+            if (!matchResponse.ok) {
+              const errorData = await matchResponse.json();
+              throw new Error(errorData.error || "Failed to create match");
+            }
+            const { matchId } = await matchResponse.json();
+
+            // Set match winner
+            const winnerResponse = await fetch("http://localhost:4000/tournament/match/winner", {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${sessionToken}`
+              },
+              body: JSON.stringify({
+                tournamentId: backendTournamentId,
+                matchId,
+                winner: winnerName,
+              }),
+            });
+            if (!winnerResponse.ok) {
+              const errorData = await winnerResponse.json();
+              throw new Error(errorData.error || "Failed to set match winner");
+            }
+            bracketInstance.setMatchWinner(match.id, winnerId);
+            router.navigate("/game");
+          } catch (error) {
+            console.error("Error recording match winner:", error);
+            alert("Failed to record match winner: " + (error instanceof Error ? error.message : "Unknown error"));
           }
-
-          // Use fields directly from TournamentMatch  * Ensure all fields are present
-          if (!match.tournamentId || match.roundNumber == null) {
-            throw new Error("Tournament match is missing required fields (tournamentId or roundNumber)");
-          }
-
-          // Debug the request body
-          const requestBody = {
-            tournamentId: backendTournamentId,
-            roundNumber: match.roundNumber,
-            player1: player1Name,
-            player2: player2Name,
-          };
-          console.log("Sending /tournament/match request with body:", requestBody);
-
-          // Create tournament match on backend
-          const matchResponse = await fetch("http://localhost:4000/tournament/match", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${sessionToken}`
-            },
-            body: JSON.stringify(requestBody),
-          });
-          if (!matchResponse.ok) {
-            const errorData = await matchResponse.json();
-            throw new Error(errorData.error || "Failed to create match");
-          }
-          const { matchId } = await matchResponse.json();
-
-          // Set match winner
-          const winnerResponse = await fetch("http://localhost:4000/tournament/match/winner", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${sessionToken}`
-            },
-            body: JSON.stringify({
-              tournamentId: backendTournamentId,
-              matchId,
-              winner: winnerName,
-            }),
-          });
-          if (!winnerResponse.ok) {
-            const errorData = await winnerResponse.json();
-            throw new Error(errorData.error || "Failed to set match winner");
-          }
-          bracketInstance.setMatchWinner(match.id, winnerId);
-          router.navigate("/game");
-        } catch (error) {
-          console.error("Error recording match winner:", error);
-          alert("Failed to record match winner: " + (error instanceof Error ? error.message : "Unknown error"));
+        } else {
+          console.error("No match found from getNextMatch");
         }
       } else {
-        console.error("No match found from getNextMatch");
+        console.error("bracketInstance or backendTournamentId is null", { bracketInstance, backendTournamentId });
       }
-    } else {
-      console.error("bracketInstance or backendTournamentId is null", { bracketInstance, backendTournamentId });
-    }
-  } : undefined,
-  navigate,
-  false,
-  isTournamentMode
-);
+    } : undefined;
+
+    gameInstance = new PongGame(
+      left,
+      right,
+      "pongCanvas",
+      "speedSlider",
+      "backgroundColorSelect",
+      "scoreLeft",
+      "scoreRight",
+      "restartButton",
+      "settingsButton",
+      "settingsMenu",
+      "settingsContainer",
+      statsManager,
+      statsManager.getCurrentUser()?.username || null,
+      onGameEnd,
+      navigate,
+      isTournamentMode
+    );
   }, 0);
   return html;
 }
@@ -533,6 +540,103 @@ router.addRoute("/spaceBattleGame", () => {
   return html;
 });
 
+// Add settings route
+router.addRoute("/settings", () => {
+  const settingsView = new SettingsView(statsManager, navigate);
+  const loadingContent = '<div class="settings-loading">Loading settings...</div>';
+  
+  // Handle the async operations after initial render
+  setTimeout(async () => {
+    const content = await settingsView.render();
+    const appElement = document.getElementById("app");
+    if (appElement) {
+      appElement.innerHTML = content;
+      await settingsView.setup();
+    }
+  }, 0);
+
+  return loadingContent;
+});
+
+// Add profile route
+router.addRoute("/profile", async () => {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    router.navigate("/login");
+    return "";
+  }
+
+  const sessionToken = localStorage.getItem("sessionToken");
+  try {
+    const response = await fetch(`http://localhost:4000/profile/me`, {
+      headers: { "Authorization": `Bearer ${sessionToken}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error("Failed to fetch profile data");
+    }
+
+    const { user, matches } = await response.json();
+    const playerStats = {
+      wins: user.wins || 0,
+      losses: user.losses || 0,
+      tournamentsWon: user.tournamentsWon || 0
+    };
+
+    // Group matches by game type for current session stats
+    const gameStats: Record<string, GameStats> = {};
+    matches.forEach((match: any) => {
+      const { gameType, userName, opponentName, userScore, opponentScore } = match;
+      if (!gameStats[gameType]) {
+        gameStats[gameType] = {
+          username: currentUser.username,
+          gameType,
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0
+        };
+      }
+      gameStats[gameType].gamesPlayed++;
+      if (userName === currentUser.username && userScore > opponentScore) {
+        gameStats[gameType].wins++;
+      } else if (opponentName === currentUser.username && opponentScore > userScore) {
+        gameStats[gameType].wins++;
+      } else {
+        gameStats[gameType].losses++;
+      }
+    });
+
+    // Convert matches to MatchRecord format
+    const matchHistory: MatchRecord[] = matches.map((match: any) => ({
+      winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
+      loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
+      timestamp: match.date
+    }));
+
+    const html = renderProfilePage(
+      currentUser.username,
+      currentUser.email,
+      currentUser.avatarUrl,
+      playerStats,
+      matchHistory,
+      gameStats
+    );
+
+    // Setup profile page after the HTML is rendered
+    setTimeout(() => {
+      setupProfilePage(() => {
+        router.navigate("/welcome");
+      });
+    }, 0);
+
+    return html;
+  } catch (error) {
+    console.error("Error fetching profile data:", error);
+    router.navigate("/welcome");
+    return "";
+  }
+});
+
 // Starts the router
 router.start();
 
@@ -540,72 +644,108 @@ router.start();
 function setupRouteListeners() {
   console.log("Setting up route listeners for pathname:", window.location.pathname);
   if (window.location.pathname === "/" || window.location.pathname === "/welcome") {
-    getCurrentUser().then(currentUser => {
-      const appContainer = document.getElementById("app");
-      if (!appContainer) return;
-      if (currentUser) {
-        console.log("Setting up logged-in welcome page");
-        appContainer.innerHTML = renderLoggedInWelcomePage(
-          currentUser.username,
-          currentUser.email,
-          currentUser.avatarUrl
-        );
-        setupLoggedInWelcomePage(
-          async () => {
-            console.log("Logout triggered from logged-in welcome page");
-            const sessionToken = localStorage.getItem("sessionToken");
-            if (sessionToken) {
-              try {
-                await fetch("http://localhost:4000/logout", {
-                  method: "POST",
-                  headers: { "Authorization": `Bearer ${sessionToken}` }
-                });
-              } catch (error) {
-                console.error("Logout error:", error);
-              }
-            }
-            localStorage.removeItem("sessionToken");
-            router.navigate("/");
-          },
-          currentUser.username,
-          () => {
-            console.log("Play Match triggered, setting players and navigating");
-            const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
-            if (gameModeSelect) {
-              const selectedMode = gameModeSelect.value;
-              tournament.addPlayers([currentUser.username, "Player 2"]);
-              isTournamentMode = false;
-              if (selectedMode === "standard") {
-                router.navigate("/game");
-              } else if (selectedMode === "neonCity") {
-                router.navigate("/neonCityGame");
-              } else if (selectedMode === "ai") {
-                router.navigate("/aiGame");
-              } else if (selectedMode === "spaceBattle") {
-                router.navigate("/spaceBattleGame");
-              }
-            } else {
-              console.error("gameModeSelect not found!");
-            }
-          },
-          () => {
-            console.log("Play Tournament triggered, navigating to /tournament");
-            tournament.clearPlayers();
-            router.navigate("/tournament");
+    const appContainer = document.getElementById("app");
+    if (!appContainer) return;
+
+    // Setup event listeners for welcome page elements
+    const registerButton = document.getElementById("registerButton");
+    const loginButton = document.getElementById("loginButton");
+    const settingsLink = document.getElementById("settingsLink");
+    const profileLink = document.getElementById("profileLink");
+    const logoutLink = document.getElementById("logoutLink");
+    const playMatchButton = document.getElementById("playMatchButton");
+    const playTournamentButton = document.getElementById("playTournamentButton");
+    const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
+    const toggleSidebarButton = document.getElementById("toggleSidebarButton");
+    const sidebar = document.getElementById("sidebar");
+
+    // Setup pre-login buttons
+    if (registerButton) {
+      registerButton.addEventListener("click", () => router.navigate("/register"));
+    }
+    if (loginButton) {
+      loginButton.addEventListener("click", () => router.navigate("/login"));
+    }
+
+    // Setup post-login elements
+    if (logoutLink) {
+      logoutLink.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const sessionToken = localStorage.getItem("sessionToken");
+        if (sessionToken) {
+          try {
+            await fetch("http://localhost:4000/logout", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${sessionToken}` }
+            });
+          } catch (error) {
+            console.error("Logout error:", error);
           }
-        );
-      } else {
-        console.log("Setting up pre-login welcome page");
-        appContainer.innerHTML = renderWelcomePage(
-          () => router.navigate("/register"),
-          () => router.navigate("/login")
-        );
-        setupWelcomePage(
-          () => router.navigate("/register"),
-          () => router.navigate("/login")
-        );
-      }
-    });
+        }
+        localStorage.removeItem("sessionToken");
+        router.navigate("/");
+      });
+    }
+
+    if (settingsLink) {
+      settingsLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        router.navigate("/settings");
+      });
+    }
+
+    if (profileLink) {
+      profileLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        router.navigate("/profile");
+      });
+    }
+
+    if (playMatchButton && gameModeSelect) {
+      playMatchButton.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const currentUser = await getCurrentUser();
+        if (!currentUser) return;
+
+        const selectedMode = gameModeSelect.value;
+        tournament.addPlayers([currentUser.username, "Player 2"]);
+        isTournamentMode = false;
+        if (selectedMode === "standard") {
+          router.navigate("/game");
+        } else if (selectedMode === "neonCity") {
+          router.navigate("/neonCityGame");
+        } else if (selectedMode === "ai") {
+          router.navigate("/aiGame");
+        } else if (selectedMode === "spaceBattle") {
+          router.navigate("/spaceBattleGame");
+        }
+      });
+    }
+
+    if (playTournamentButton) {
+      playTournamentButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        tournament.clearPlayers();
+        router.navigate("/tournament");
+      });
+    }
+
+    if (toggleSidebarButton && sidebar) {
+      toggleSidebarButton.addEventListener("click", () => {
+        sidebar.classList.toggle("visible");
+      });
+
+      document.addEventListener("click", (e) => {
+        const target = e.target as Node;
+        if (
+          sidebar.classList.contains("visible") &&
+          !sidebar.contains(target) &&
+          !toggleSidebarButton.contains(target)
+        ) {
+          sidebar.classList.remove("visible");
+        }
+      });
+    }
   } else if (window.location.pathname === "/register") {
     console.log("Setting up registration form");
     setupRegistrationForm(async (username, email, password, avatar) => {

@@ -1,51 +1,83 @@
-import { FastifyInstance } from 'fastify'
-import { Database } from 'sqlite3'
-import { User, UserSettings } from '../types'
+import { FastifyInstance } from 'fastify';
+import { Database } from 'sqlite3';
+import { UserSettings } from '../types';
 
 export async function settingsRoutes(fastify: FastifyInstance, db: Database) {
-  fastify.post<{ Body: { userId: number; backgroundColor?: string; ballSpeed?: number } }>('/settings', async (request, reply) => {
-    const { userId, backgroundColor, ballSpeed } = request.body
-
-    if (!userId) {
-      reply.code(400)
-      return { error: 'userId is required' }
+  // Get user settings
+  fastify.get('/settings', async (request, reply) => {
+    const user = request.user;
+    if (!user) {
+      reply.code(401);
+      return { error: 'Unauthorized' };
     }
 
     try {
-      const user = await new Promise<User | undefined>((resolve, reject) => {
-        db.get('SELECT id FROM users WHERE id = ?', [userId], (err, row: User | undefined) => {
-          if (err) reject(err)
-          resolve(row)
-        })
-      })
-      if (!user) {
-        reply.code(404)
-        return { error: 'User not found' }
+      const settings = await new Promise<UserSettings | undefined>((resolve, reject) => {
+        db.get('SELECT backgroundColor, ballSpeed FROM user_settings WHERE userId = ?', [user.id], (err, row: UserSettings | undefined) => {
+          if (err) reject(err);
+          resolve(row);
+        });
+      });
+
+      return settings || { backgroundColor: '#d8a8b5', ballSpeed: 1.0 };
+    } catch (err) {
+      fastify.log.error('Settings fetch error:', err);
+      reply.code(500);
+      return { error: 'Server error' };
+    }
+  });
+
+  // Update user settings
+  fastify.post<{ Body: Partial<UserSettings> }>('/settings', async (request, reply) => {
+    const user = request.user;
+    if (!user) {
+      reply.code(401);
+      return { error: 'Unauthorized' };
+    }
+
+    const { backgroundColor, ballSpeed } = request.body;
+    const updatedAt = new Date().toISOString();
+
+    try {
+      // Check if settings exist
+      const existingSettings = await new Promise<UserSettings | undefined>((resolve, reject) => {
+        db.get('SELECT * FROM user_settings WHERE userId = ?', [user.id], (err, row: UserSettings | undefined) => {
+          if (err) reject(err);
+          resolve(row);
+        });
+      });
+
+      if (existingSettings) {
+        // Update existing settings
+        await new Promise<void>((resolve, reject) => {
+          db.run(
+            'UPDATE user_settings SET backgroundColor = ?, ballSpeed = ?, updatedAt = ? WHERE userId = ?',
+            [backgroundColor, ballSpeed, updatedAt, user.id],
+            (err) => {
+              if (err) reject(err);
+              resolve();
+            }
+          );
+        });
+      } else {
+        // Insert new settings
+        await new Promise<void>((resolve, reject) => {
+          db.run(
+            'INSERT INTO user_settings (userId, backgroundColor, ballSpeed, updatedAt) VALUES (?, ?, ?, ?)',
+            [user.id, backgroundColor, ballSpeed, updatedAt],
+            (err) => {
+              if (err) reject(err);
+              resolve();
+            }
+          );
+        });
       }
 
-      await new Promise<void>((resolve, reject) => {
-        db.run(
-          `
-          INSERT INTO user_settings (userId, backgroundColor, ballSpeed, updatedAt)
-          VALUES (?, ?, ?, ?)
-          ON CONFLICT(userId) DO UPDATE SET
-            backgroundColor = COALESCE(?, backgroundColor),
-            ballSpeed = COALESCE(?, ballSpeed),
-            updatedAt = ?
-          `,
-          [userId, backgroundColor, ballSpeed, new Date().toISOString(), backgroundColor, ballSpeed, new Date().toISOString()],
-          (err) => {
-            if (err) reject(err)
-            resolve()
-          }
-        )
-      })
-
-      return { status: 'Settings updated' }
+      return { status: 'Settings updated' };
     } catch (err) {
-      fastify.log.error('Settings update error:', err)
-      reply.code(500)
-      return { error: 'Server error' }
+      fastify.log.error('Settings update error:', err);
+      reply.code(500);
+      return { error: 'Server error' };
     }
-  })
-}
+  });
+} 
