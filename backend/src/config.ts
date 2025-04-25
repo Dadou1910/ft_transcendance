@@ -1,0 +1,40 @@
+import fp from 'fastify-plugin'
+import { FastifyEnvOptions } from '@fastify/env'
+
+// Define the shape of the environment variables for TypeScript
+export interface Env {
+  PORT: number
+  DB_PATH: string
+  BCRYPT_SALT_ROUNDS: number
+}
+
+// Define the schema for environment variables validation
+const schema = {
+  type: 'object',
+  required: ['PORT', 'DB_PATH', 'BCRYPT_SALT_ROUNDS'],
+  properties: {
+    PORT: { 
+      type: 'number',
+      default: 4000 // Default port if not specified
+    },
+    DB_PATH: { 
+      type: 'string' // Path to SQLite database
+    },
+    BCRYPT_SALT_ROUNDS: { 
+      type: 'number',
+      default: 10 // Default for bcrypt hashing
+    }
+  }
+}
+
+// Configure the @fastify/env plugin options
+const options: FastifyEnvOptions = {
+  schema, // Validation schema
+  dotenv: true, // Load .env file
+  data: process.env // Source of environment variables
+}
+
+// Export the plugin to load environment variables
+export default fp(async (fastify) => {
+  await fastify.register(import('@fastify/env'), options)
+})

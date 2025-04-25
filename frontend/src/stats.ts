@@ -44,31 +44,91 @@ export interface UserSettings {
   ballSpeed?: number;
 }
 
+// Defines structure for game-specific statistics
+export interface GameStats {
+  username: string;
+  gameType: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+}
+
+// Defines structure for match details
+export interface MatchDetails {
+  player1Score: number;
+  player2Score: number;
+  sessionToken?: string | null;
+}
+
 // Manages game statistics, user data, and tournament information
 export class StatsManager {
-  // Stores match history
   private matchHistory: MatchRecord[] = [];
-  // Stores player statistics
   private playerStats: Record<string, PlayerStats> = {};
-  // Stores user accounts
   private users: User[] = [];
-  // Tracks current logged-in user
-  private currentUserEmail: string | null = null;
-  // Maps tournament IDs to players
+  private sessionToken: string | null = null;
   private tournamentPlayers: Record<string, Player[]> = {};
-  // Maps tournament IDs to matches
   private tournamentMatches: Record<string, TournamentMatch[]> = {};
-  // Stores user settings by email
   private userSettings: Record<string, UserSettings> = {};
+  private gameStats: Record<string, Record<string, GameStats>> = {};
+  private currentUser: User | null = null;
 
-  // Initializes the stats manager
+  private log(message: string, data?: any): void {
+    console.log(`[StatsManager] ${message}`, data ? data : '');
+  }
+
+  private error(message: string, error?: any): void {
+    console.error(`[StatsManager] ${message}`, error ? error : '');
+  }
+
   constructor() {
-    // Note: For database integration, initialize by loading data from tables
-    this.currentUserEmail = localStorage.getItem("currentUserEmail") || null;
+    this.sessionToken = localStorage.getItem("sessionToken") || null;
+    this.loadInitialData();
+  }
+
+  private async loadInitialData(): Promise<void> {
+    try {
+      if (this.sessionToken) {
+        this.log('Attempting to fetch user profile with session token');
+        const response = await fetch(`http://localhost:4000/profile/me`, {
+          headers: { "Authorization": `Bearer ${this.sessionToken}` }
+        });
+        if (response.ok) {
+          const { user, matches, settings } = await response.json();
+          this.log('Fetched user data', user);
+          this.users = this.users.filter(u => u.email !== user.email);
+          this.users.push({
+            username: user.name,
+            email: user.email,
+            password: "",
+            avatarUrl: user.avatarUrl,
+          });
+          this.matchHistory = matches.map((m: any) => ({
+            winner: m.userScore > m.opponentScore ? m.userName : m.opponentName,
+            loser: m.userScore > m.opponentScore ? m.opponentName : m.userName,
+            timestamp: m.date,
+          }));
+          this.playerStats[user.name] = {
+            wins: user.wins,
+            losses: user.losses,
+            tournamentsWon: user.tournamentsWon,
+          };
+          if (settings) {
+            this.userSettings[user.name] = {
+              backgroundColor: settings.backgroundColor,
+              ballSpeed: settings.ballSpeed,
+            };
+          }
+        } else {
+          this.error(`Failed to fetch profile with session token. Status: ${response.status}`);
+        }
+      }
+      this.log("Initialized StatsManager with backend data");
+    } catch (error) {
+      this.error("Error loading initial data from backend", error);
+    }
   }
 
   // --- User Management ---
-  // Adds a new user to the system
   addUser(username: string, email: string, password: string, avatar?: File): void {
     let avatarUrl: string | undefined;
     if (avatar) {
@@ -83,64 +143,33 @@ export class StatsManager {
     console.log("Added user:", { username, email, avatarUrl });
   }
 
-  // Checks if a user exists by username
   hasUser(username: string): boolean {
     const exists = this.users.some((user) => user.username.toLowerCase() === username.toLowerCase());
     console.log("Checking if user exists:", { username, exists });
     return exists;
   }
 
-  // Retrieves a user by email
   getUserByEmail(email: string): User | undefined {
     const user = this.users.find((user) => user.email === email.toLowerCase());
     console.log("getUserByEmail:", { email, found: !!user });
     return user;
   }
 
-  // Sets the current user
-  setCurrentUser(email: string): void {
-    console.log("Setting current user to:", email);
-    this.currentUserEmail = email.toLowerCase();
-    localStorage.setItem("currentUserEmail", this.currentUserEmail);
-  }
-
-  // Gets the current user
-  getCurrentUser(): User | null {
-    if (!this.currentUserEmail) {
-      console.log("No current user set");
-      return null;
-    }
-    const user = this.getUserByEmail(this.currentUserEmail);
-    console.log("getCurrentUser:", user ? user.email : "none");
-    return user || null;
-  }
-
-  // Logs out the current user
-  logout(): void {
-    console.log("Logging out, clearing current user");
-    this.currentUserEmail = null;
-    localStorage.removeItem("currentUserEmail");
-  }
-
   // --- Tournament Management ---
-  // Adds players to a tournament
   addTournamentPlayers(tournamentId: string, players: Player[]): void {
     this.tournamentPlayers[tournamentId] = players;
     console.log("Added tournament players:", { tournamentId, players });
   }
 
-  // Retrieves players for a tournament
   getTournamentPlayers(tournamentId: string): Player[] {
     return this.tournamentPlayers[tournamentId] || [];
   }
 
-  // Clears players from a tournament
   clearTournamentPlayers(tournamentId: string): void {
     delete this.tournamentPlayers[tournamentId];
     console.log("Cleared tournament players:", { tournamentId });
   }
 
-  // Adds a match to a tournament
   addTournamentMatch(tournamentId: string, match: TournamentMatch): void {
     if (!this.tournamentMatches[tournamentId]) {
       this.tournamentMatches[tournamentId] = [];
@@ -149,7 +178,6 @@ export class StatsManager {
     console.log("Added tournament match:", { tournamentId, match });
   }
 
-  // Sets the winner of a tournament match
   setTournamentMatchWinner(tournamentId: string, matchId: string, winnerId: string): void {
     const matches = this.tournamentMatches[tournamentId];
     if (matches) {
@@ -168,36 +196,138 @@ export class StatsManager {
     }
   }
 
-  // Retrieves matches for a tournament
   getTournamentMatches(tournamentId: string): TournamentMatch[] {
     return this.tournamentMatches[tournamentId] || [];
   }
 
   // --- Match and Stats Management ---
-  // Records a match result
-  recordMatch(winner: string, loser: string, matchDetails?: { player1Score: number; player2Score: number }): void {
+  async recordMatch(winner: string, loser: string, gameType: string, matchDetails: MatchDetails): Promise<void> {
     const match: MatchRecord = {
       winner,
       loser,
       timestamp: new Date().toISOString(),
     };
     this.matchHistory.push(match);
-
-    // Initialize player stats if not present
-    if (!this.playerStats[winner]) {
-      this.playerStats[winner] = { wins: 0, losses: 0, tournamentsWon: 0 };
-    }
-    if (!this.playerStats[loser]) {
-      this.playerStats[loser] = { wins: 0, losses: 0, tournamentsWon: 0 };
-    }
-
+  
+    // Initialize player stats if they don't exist
+    this.playerStats[winner] = this.playerStats[winner] || { wins: 0, losses: 0, tournamentsWon: 0 };
+    this.playerStats[loser] = this.playerStats[loser] || { wins: 0, losses: 0, tournamentsWon: 0 };
+  
     this.playerStats[winner].wins += 1;
     this.playerStats[loser].losses += 1;
-
-    console.log("Recorded match:", { winner, loser, matchDetails });
+  
+    this.log("Recorded match locally", { winner, loser, matchDetails });
+  
+    try {
+      // Fetch the current user
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (!sessionToken) {
+        throw new Error("No session token available. Please log in again.");
+      }
+  
+      const userResponse = await fetch(`http://localhost:4000/profile/me`, {
+        headers: { "Authorization": `Bearer ${sessionToken}` }
+      });
+      if (!userResponse.ok) {
+        throw new Error("Failed to fetch current user. Please log in again.");
+      }
+      const { user } = await userResponse.json();
+      const loggedInUsername = user.name;
+  
+      console.log("Fetched logged-in user:", loggedInUsername);
+  
+      // Simplify logic: logged-in user is always userName
+      let userName: string = loggedInUsername;
+      let opponentName: string;
+      let userScore: number;
+      let opponentScore: number;
+  
+      // In AIPong, playerLeftName is the user, playerRightName is AI Opponent
+      if (gameType === "AI Pong") {
+        opponentName = "AI Opponent";
+        userScore = matchDetails.player1Score; // scoreLeft (user)
+        opponentScore = matchDetails.player2Score; // scoreRight (AI)
+      } else {
+        // For other game modes (Pong, Neon City Pong, Space Battle)
+        // Assume playerLeftName is the user (consistent with initialization)
+        if (winner === loggedInUsername) {
+          opponentName = loser;
+          userScore = matchDetails.player1Score;
+          opponentScore = matchDetails.player2Score;
+        } else {
+          opponentName = winner;
+          userScore = matchDetails.player1Score;
+          opponentScore = matchDetails.player2Score;
+        }
+      }
+  
+      console.log("Sending to /match:", {
+        userName,
+        opponentName,
+        userScore,
+        opponentScore,
+        gameType,
+      });
+  
+      const sessionTokenForHeader = matchDetails.sessionToken ?? null;
+      const matchResponse = await fetch("http://localhost:4000/match", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(sessionTokenForHeader ? { "Authorization": `Bearer ${sessionTokenForHeader}` } : {})
+        },
+        body: JSON.stringify({
+          userName,
+          opponentName,
+          userScore,
+          opponentScore,
+          gameType,
+        }),
+      });
+  
+      const responseData = await matchResponse.json();
+      console.log("Match response:", { status: matchResponse.status, data: responseData });
+  
+      if (!matchResponse.ok) {
+        throw new Error(responseData.error || "Failed to record match");
+      }
+  
+      console.log("Match recorded in backend:", { userName, opponentName, userScore, opponentScore, gameType });
+    } catch (error) {
+      console.error("Error recording match in backend:", error);
+      alert("Failed to record match: " + (error instanceof Error ? error.message : "Unknown error"));
+    }
   }
 
-  // Records a tournament win for a player
+  recordGameStats(username: string, gameType: string, isWinner: boolean): void {
+    if (!this.gameStats[username]) {
+      this.gameStats[username] = {};
+    }
+    if (!this.gameStats[username][gameType]) {
+      this.gameStats[username][gameType] = {
+        username,
+        gameType,
+        gamesPlayed: 0,
+        wins: 0,
+        losses: 0,
+      };
+    }
+
+    const stats = this.gameStats[username][gameType];
+    stats.gamesPlayed += 1;
+    if (isWinner) {
+      stats.wins += 1;
+    } else {
+      stats.losses += 1;
+    }
+
+    console.log("Recorded game stats:", { username, gameType, isWinner, stats });
+  }
+
+  getGameStats(username: string, gameType: string): GameStats | null {
+    return this.gameStats[username]?.[gameType] || null;
+  }
+
   recordTournamentWin(player: string): void {
     if (!this.playerStats[player]) {
       this.playerStats[player] = { wins: 0, losses: 0, tournamentsWon: 0 };
@@ -206,28 +336,92 @@ export class StatsManager {
     console.log("Recorded tournament win:", { player });
   }
 
-  // Retrieves the match history
   getMatchHistory(): MatchRecord[] {
     return this.matchHistory;
   }
 
-  // Retrieves statistics for a player
   getPlayerStats(player: string): PlayerStats | null {
     return this.playerStats[player] || null;
   }
 
-  // --- User Settings Management ---
-  // Sets user settings for a given email
-  setUserSettings(email: string, settings: Partial<UserSettings>): void {
-    if (!this.userSettings[email]) {
-      this.userSettings[email] = {};
+  async fetchCurrentUser(): Promise<User | null> {
+    const sessionToken = localStorage.getItem("sessionToken");
+    if (!sessionToken) {
+      return null;
     }
-    this.userSettings[email] = { ...this.userSettings[email], ...settings };
-    console.log("Set user settings:", { email, settings });
+
+    try {
+      const response = await fetch("http://localhost:4000/profile/me", {
+        headers: {
+          "Authorization": `Bearer ${sessionToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user profile");
+      }
+
+      const data = await response.json();
+      this.currentUser = data.user;
+      return this.currentUser;
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      return null;
+    }
   }
 
-  // Retrieves user settings for a given email
-  getUserSettings(email: string): UserSettings | null {
-    return this.userSettings[email] || null;
+  getCurrentUser(): User | null {
+    const sessionToken = localStorage.getItem("sessionToken");
+    if (!sessionToken) {
+      return null;
+    }
+    return this.currentUser;
+  }
+
+  // --- User Settings Management ---
+  async setUserSettings(username: string, settings: Partial<UserSettings>): Promise<void> {
+    if (!this.userSettings[username]) {
+      this.userSettings[username] = {};
+    }
+    this.userSettings[username] = { ...this.userSettings[username], ...settings };
+    console.log("Set user settings locally:", { username, settings });
+
+    try {
+      const sessionToken = localStorage.getItem("sessionToken");
+      // Fetch user ID by username using /profile/:id
+      const userResponse = await fetch(`http://localhost:4000/profile/${encodeURIComponent(username)}`, {
+        headers: { "Authorization": `Bearer ${sessionToken}` }
+      });
+      if (!userResponse.ok) {
+        throw new Error("User not found in backend");
+      }
+      const { user: backendUser } = await userResponse.json();
+
+      // Send settings to backend
+      const settingsResponse = await fetch("http://localhost:4000/settings", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          backgroundColor: settings.backgroundColor,
+          ballSpeed: settings.ballSpeed,
+        }),
+      });
+
+      if (!settingsResponse.ok) {
+        const data = await settingsResponse.json();
+        throw new Error(data.error || "Failed to save settings");
+      }
+
+      console.log("Settings saved to backend:", { username: backendUser.name, settings });
+    } catch (error) {
+      console.error("Error saving settings to backend:", error);
+    }
+  }
+
+  getUserSettings(username: string): UserSettings | null {
+    return this.userSettings[username] || null;
   }
 }

@@ -1,7 +1,7 @@
 // Defines the structure of a route
 interface Route {
   path: string;
-  render: () => string;
+  render: () => string | Promise<string>;
 }
 
 // Manages client-side routing for the application
@@ -25,7 +25,7 @@ export class Router {
   }
 
   // Adds a new route to the router
-  addRoute(path: string, render: () => string) {
+  addRoute(path: string, render: () => string | Promise<string>) {
     this.routes.push({ path, render });
   }
 
@@ -37,7 +37,7 @@ export class Router {
   }
 
   // Handles route changes and renders the appropriate content
-  handleRouteChange() {
+  async handleRouteChange() {
     let path = window.location.pathname;
     console.log("Handling route change, path:", path);
     // Default to root path if none provided
@@ -47,10 +47,16 @@ export class Router {
     const route = this.routes.find((r) => r.path === path);
     if (route) {
       console.log("Rendering route:", route.path);
-      this.appContainer.innerHTML = route.render();
-      // Execute callback if provided
-      if (this.afterRenderCallback) {
-        this.afterRenderCallback();
+      try {
+        const result = await route.render();
+        this.appContainer.innerHTML = result;
+        // Execute callback if provided
+        if (this.afterRenderCallback) {
+          this.afterRenderCallback();
+        }
+      } catch (error) {
+        console.error("Error rendering route:", error);
+        this.navigate("/");
       }
     } else {
       console.log("Route not found, redirecting to /");

@@ -16,8 +16,8 @@ export class PongGame {
   protected settingsContainer: HTMLDivElement;
   // Manages game statistics
   protected statsManager: StatsManager;
-  // User email for settings persistence
-  protected userEmail: string | null;
+  // User name for settings persistence
+  protected userName: string | null;
   // Navigation callback
   protected navigate: (path: string) => void;
 
@@ -26,8 +26,8 @@ export class PongGame {
   protected paddleRightY: number = 160;
   protected ballX: number = 400;
   protected ballY: number = 200;
-  protected ballSpeedX: number = 2.5;
-  protected ballSpeedY: number = 1.5;
+  protected ballSpeedX: number = 6.0;
+  protected ballSpeedY: number = 4.1;
   protected scoreLeft: number = 0;
   protected scoreRight: number = 0;
   protected gameOver: boolean = false;
@@ -38,6 +38,12 @@ export class PongGame {
   protected backgroundColor: string = "#d8a8b5";
   protected onGameEnd?: (winnerName: string) => void;
 
+  // Tournament mode flag
+  protected isTournamentMode: boolean;
+
+  // Flag to prevent multiple onGameEnd triggers
+  protected hasTriggeredGameEnd: boolean = false;
+
   // Game constants
   protected paddleSpeed: number = 5;
   protected keys: Record<"w" | "s" | "ArrowUp" | "ArrowDown", boolean> = {
@@ -46,11 +52,17 @@ export class PongGame {
     ArrowUp: false,
     ArrowDown: false,
   };
+  // Base ball speeds
+  protected baseBallSpeedX: number = 6.0;
+  protected baseBallSpeedY: number = 4.1;
 
   // Canvas dimensions and scaling
   protected baseWidth: number = 800;
   protected baseHeight: number = 400;
   protected scale: number = 1;
+
+  // Timing for delta-time calculation
+  protected lastTime: number = 0; // Stores timestamp of last frame
 
   // Initializes the game with player names and UI element IDs
   constructor(
@@ -66,9 +78,10 @@ export class PongGame {
     settingsMenuId: string,
     settingsContainerId: string,
     statsManager: StatsManager,
-    userEmail: string | null,
+    userName: string | null,
     onGameEnd?: (winnerName: string) => void,
-    navigate?: (path: string) => void
+    navigate?: (path: string) => void,
+    isTournamentMode: boolean = false
   ) {
     this.playerLeftName = playerLeftName;
     this.playerRightName = playerRightName;
@@ -83,9 +96,10 @@ export class PongGame {
     this.settingsMenu = document.getElementById(settingsMenuId) as HTMLDivElement;
     this.settingsContainer = document.getElementById(settingsContainerId) as HTMLDivElement;
     this.statsManager = statsManager;
-    this.userEmail = userEmail;
+    this.userName = userName;
     this.onGameEnd = onGameEnd;
     this.navigate = navigate || (() => {});
+    this.isTournamentMode = isTournamentMode;
 
     // Ensure restartButton is in buttonContainer
     const buttonContainer = document.getElementById("buttonContainer");
@@ -98,7 +112,7 @@ export class PongGame {
     if (backButton) {
       backButton.addEventListener("click", () => {
         this.cleanup();
-        this.navigate("/welcome");
+        this.navigate("/");
       });
     } else {
       console.error("Back button not found!");
@@ -107,12 +121,12 @@ export class PongGame {
     this.setupEventListeners();
     this.resizeCanvas();
     window.addEventListener("resize", () => this.resizeCanvas());
-    this.draw();
+    this.draw(performance.now()); // Initialize with current time
   }
 
-  // Cleans up event listeners
-  public cleanup(): void {
-    window.removeEventListener("resize", () => this.resizeCanvas());
+  // Computes the speed multiplier based on the speed slider
+  protected getSpeedMultiplier(): number {
+    return parseInt(this.speedSlider.value) / 5; // Default slider value of 5 gives multiplier of 1
   }
 
   // Resizes canvas based on browser window size and maintains aspect ratio
@@ -139,38 +153,37 @@ export class PongGame {
     this.ballX = (this.baseWidth / 2) * this.scale;
     this.ballY = (this.baseHeight / 2) * this.scale;
     // Initialize ball speed with slider value
-    const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default slider value
-    this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
-    this.ballSpeedY = 1.5 * this.scale * speedMultiplier;
+    const speedMultiplier = this.getSpeedMultiplier();
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier;
     this.paddleLeftY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleRightY = (this.baseHeight / 2 - 40) * this.scale;
     this.paddleSpeed = 7 * this.scale;
   }
 
   // Sets up event listeners for game controls and settings
-  protected setupEventListeners() {
-    this.speedSlider.addEventListener("input", (e) => {
-      const speed = parseInt((e.target as HTMLInputElement).value);
-      // Update ball speed based on slider value
-      const speedMultiplier = speed / 5; // Assuming 5 is default slider value
-      this.ballSpeedX = 2.5 * (this.ballSpeedX / Math.abs(this.ballSpeedX)) * this.scale * speedMultiplier;
-      this.ballSpeedY = 1.5 * (this.ballSpeedY / Math.abs(this.ballSpeedY)) * this.scale * speedMultiplier;
-      if (this.userEmail) {
-        this.statsManager.setUserSettings(this.userEmail, { ballSpeed: speed });
+  protected setupEventListeners(): void {
+    // Speed slider
+    this.speedSlider.addEventListener("input", () => {
+      if (this.userName) {
+        this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(this.speedSlider.value) });
       }
     });
 
+    // Background color selector
     if (this.backgroundColorSelect) {
+      this.backgroundColor = this.backgroundColorSelect.value || "#d8a8b5";
       this.backgroundColorSelect.addEventListener("change", (e) => {
         this.backgroundColor = (e.target as HTMLSelectElement).value;
-        if (this.userEmail) {
-          this.statsManager.setUserSettings(this.userEmail, { backgroundColor: this.backgroundColor });
+        if (this.userName) {
+          this.statsManager.setUserSettings(this.userName, { backgroundColor: this.backgroundColor });
         }
       });
     } else {
       console.warn("Background color select element not found");
     }
 
+    // Settings menu toggle
     this.settingsButton.addEventListener("click", (e) => {
       e.stopPropagation();
       this.settingsMenu.classList.toggle("visible");
@@ -182,6 +195,7 @@ export class PongGame {
       }
     });
 
+    // Start/Restart button
     this.restartButton.addEventListener("click", () => {
       if (!this.gameStarted) {
         this.gameStarted = true;
@@ -192,16 +206,17 @@ export class PongGame {
         this.scoreLeftElement.textContent = "0";
         this.scoreRightElement.textContent = "0";
         this.gameOver = false;
+        this.hasTriggeredGameEnd = false;
         this.ballX = (this.baseWidth / 2) * this.scale;
         this.ballY = (this.baseHeight / 2) * this.scale;
-        // Reset ball speed with slider value
-        const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-        this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
-        this.ballSpeedY = 1.5 * this.scale * speedMultiplier;
+        const speedMultiplier = this.getSpeedMultiplier();
+        this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+        this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         this.restartButton.style.display = "none";
       }
     });
 
+    // Keyboard controls
     document.addEventListener("keydown", (e) => {
       if (e.key === " " && this.gameStarted) {
         this.isPaused = !this.isPaused;
@@ -219,7 +234,15 @@ export class PongGame {
   }
 
   // Renders the game and updates game state
-  protected draw() {
+  protected draw(timestamp: number = performance.now()) {
+    // Calculate delta time (in seconds)
+    const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
+    this.lastTime = timestamp;
+
+    // Target 60 FPS for normalization (1/60 seconds per frame)
+    const frameTime = 1 / 60;
+    const deltaTimeFactor = deltaTime / frameTime; // Scale movements to match 60 FPS
+
     // Clear canvas with background color
     this.ctx.fillStyle = this.backgroundColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -231,15 +254,23 @@ export class PongGame {
 
     // Update game state if not paused or over
     if (this.gameStarted && !this.isPaused && !this.gameOver) {
-      // Move paddles based on key input
-      if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed;
-      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) this.paddleLeftY += this.paddleSpeed;
-      if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed;
-      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - 80 * this.scale) this.paddleRightY += this.paddleSpeed;
+      // Move paddles based on key input, scaled by deltaTime
+      if (this.keys.w && this.paddleLeftY > 0) {
+        this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
+      }
+      if (this.keys.s && this.paddleLeftY < this.canvas.height - 80 * this.scale) {
+        this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
+      }
+      if (this.keys.ArrowUp && this.paddleRightY > 0) {
+        this.paddleRightY -= this.paddleSpeed * deltaTimeFactor;
+      }
+      if (this.keys.ArrowDown && this.paddleRightY < this.canvas.height - 80 * this.scale) {
+        this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
+      }
 
-      // Update ball position
-      this.ballX += this.ballSpeedX;
-      this.ballY += this.ballSpeedY;
+      // Update ball position (only for player1 in multiplayer mode)
+      this.ballX += this.ballSpeedX * deltaTimeFactor;
+      this.ballY += this.ballSpeedY * deltaTimeFactor;
 
       // Bounce off top and bottom walls
       if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
@@ -281,20 +312,24 @@ export class PongGame {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, {
-            player1Score: this.scoreLeft,
-            player2Score: this.scoreRight
-          });
-          if (this.onGameEnd) {
+          if (!this.isTournamentMode) { // Only record match if not in tournament mode
+            this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Pong", {
+              player1Score: this.scoreLeft,
+              player2Score: this.scoreRight,
+              sessionToken: localStorage.getItem("sessionToken")
+            });
+          }
+          if (this.onGameEnd && !this.hasTriggeredGameEnd) {
+            this.hasTriggeredGameEnd = true; // Prevent multiple triggers
             this.onGameEnd(this.playerRightName);
           }
         } else {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
           // Reset ball speed with slider value
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-          this.ballSpeedX = 2.5 * this.scale * speedMultiplier;
-          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
       } else if (this.ballX > this.canvas.width) {
         this.scoreLeft++;
@@ -304,25 +339,29 @@ export class PongGame {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
-          this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, {
-            player1Score: this.scoreLeft,
-            player2Score: this.scoreRight
-          });
-          if (this.onGameEnd) {
+          if (!this.isTournamentMode) { // Only record match if not in tournament mode
+            this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
+              player1Score: this.scoreLeft,
+              player2Score: this.scoreRight,
+              sessionToken: localStorage.getItem("sessionToken")
+            });
+          }
+          if (this.onGameEnd && !this.hasTriggeredGameEnd) {
+            this.hasTriggeredGameEnd = true; // Prevent multiple triggers
             this.onGameEnd(this.playerLeftName);
           }
         } else {
           this.ballX = (this.baseWidth / 2) * this.scale;
           this.ballY = (this.baseHeight / 2) * this.scale;
           // Reset ball speed with slider value
-          const speedMultiplier = parseInt(this.speedSlider.value) / 5; // Assuming 5 is default
-          this.ballSpeedX = -2.5 * this.scale * speedMultiplier;
-          this.ballSpeedY = 1.5 * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          const speedMultiplier = this.getSpeedMultiplier();
+          this.ballSpeedX = -this.baseBallSpeedX * this.scale * speedMultiplier;
+          this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
         }
       }
     }
 
-    // Draw ball
+    // Draw ball (even for Player 2, since it receives ball position updates)
     this.ctx.beginPath();
     this.ctx.arc(this.ballX, this.ballY, 10 * this.scale, 0, Math.PI * 2);
     this.ctx.fillStyle = "white";
@@ -348,6 +387,11 @@ export class PongGame {
     }
 
     // Continue animation loop
-    requestAnimationFrame(() => this.draw());
+    requestAnimationFrame((time) => this.draw(time));
+  }
+
+  // Cleans up event listeners and WebSocket
+  public cleanup(): void {
+    window.removeEventListener("resize", () => this.resizeCanvas());
   }
 }
