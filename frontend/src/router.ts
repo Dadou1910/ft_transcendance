@@ -44,7 +44,18 @@ export class Router {
     if (!path || path === "/") {
       path = "/";
     }
-    const route = this.routes.find((r) => r.path === path);
+    // Try to find an exact match first
+    let route = this.routes.find((r) => r.path === path);
+    // If not found, check for dynamic routes (e.g., /multiplayerGame/:matchId)
+    if (!route) {
+      for (const r of this.routes) {
+        // Support /multiplayerGame/:matchId
+        if (r.path.includes(":") && this.matchDynamicRoute(r.path, path)) {
+          route = r;
+          break;
+        }
+      }
+    }
     if (route) {
       console.log("Rendering route:", route.path);
       try {
@@ -62,6 +73,18 @@ export class Router {
       console.log("Route not found, redirecting to /");
       this.navigate("/");
     }
+  }
+
+  // Helper to match dynamic routes like /multiplayerGame/:matchId
+  private matchDynamicRoute(routePath: string, actualPath: string): boolean {
+    const routeParts = routePath.split("/");
+    const pathParts = actualPath.split("/");
+    if (routeParts.length !== pathParts.length) return false;
+    for (let i = 0; i < routeParts.length; i++) {
+      if (routeParts[i].startsWith(":")) continue;
+      if (routeParts[i] !== pathParts[i]) return false;
+    }
+    return true;
   }
 
   // Starts the router and initializes the first route

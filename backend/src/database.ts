@@ -46,15 +46,6 @@ export async function initializeDatabase(fastify: FastifyInstance) {
       });
     });
 
-    // Drop the existing matches table (if it exists) to recreate it with the new schema
-    await new Promise<void>((resolve, reject) => {
-      db.run('DROP TABLE IF EXISTS matches', (err) => {
-        if (err) reject(err);
-        fastify.log.info('Dropped existing matches table');
-        resolve();
-      });
-    });
-
     await new Promise<void>((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS matches (
@@ -134,6 +125,22 @@ export async function initializeDatabase(fastify: FastifyInstance) {
       `, (err) => {
         if (err) reject(err);
         fastify.log.info('Sessions table created');
+        resolve();
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS friends (
+          userId INTEGER NOT NULL,
+          friendId INTEGER NOT NULL,
+          PRIMARY KEY (userId, friendId),
+          FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(friendId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `, (err) => {
+        if (err) reject(err);
+        fastify.log.info('Friends table created');
         resolve();
       });
     });

@@ -5,8 +5,11 @@ export async function sessionMiddleware(fastify: FastifyInstance, db: Database) 
   fastify.decorateRequest('user', null);
 
   fastify.addHook('preHandler', async (request, reply) => {
-    const publicRoutes = ['/register', '/login'];
-    if (publicRoutes.includes(request.url)) {
+    const publicRoutes = ['/register', '/login', '/ws/presence'];
+    if (request.url.startsWith('/ws/match/')) {
+      return; // Skip session validation for WebSocket match route
+    }
+    if (publicRoutes.some(route => request.url.startsWith(route))) {
       return; // Skip session validation for public routes
     }
 

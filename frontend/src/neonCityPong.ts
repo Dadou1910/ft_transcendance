@@ -36,18 +36,18 @@ export class NeonCityPong extends PongGame {
   private paddleLeftHeight: number = 80;
   private paddleRightHeight: number = 80;
   // Function to navigate to different routes
-  protected navigate: (path: string) => void;
+  public navigate: (path: string) => void;
   // Offscreen canvas for static background
   private backgroundCanvas: HTMLCanvasElement | null = null;
   private backgroundCtx: CanvasRenderingContext2D | null = null;
   // Reference to background color select element
-  protected backgroundColorSelect: HTMLSelectElement | null = null;
+  public backgroundColorSelect: HTMLSelectElement | null = null;
   // Static background image
   private backgroundImage: HTMLImageElement | null = null;
   // Store the background color select ID for re-fetching if needed
   private readonly backgroundColorSelectId: string;
   // Background color with default value
-  protected backgroundColor: string = "#d8a8b5";
+  public backgroundColor: string = "#d8a8b5";
   // Tracks if speed boost is active
   private isSpeedBoosted: boolean = false;
   // Stores the boosted speed values
@@ -504,7 +504,7 @@ private checkPowerUpCollision(): void {
   }
 
   // Main draw loop for rendering the game
-  protected draw(timestamp: number = performance.now()): void {
+  public draw(timestamp: number = performance.now()): void {
     if (!this.ctx) {
       console.error("Canvas context is null");
       return;

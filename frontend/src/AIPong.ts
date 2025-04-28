@@ -94,7 +94,7 @@ export class AIPong extends PongGame {
   };
 
   // Override draw to include AI paddle movement
-  protected draw(timestamp: number = performance.now()): void {
+  public draw(timestamp: number = performance.now()): void {
     // Calculate delta time (in seconds)
     const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
     this.lastTime = timestamp;

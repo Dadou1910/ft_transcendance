@@ -269,12 +269,11 @@ export class StatsManager {
         gameType,
       });
   
-      const sessionTokenForHeader = matchDetails.sessionToken ?? null;
       const matchResponse = await fetch("http://localhost:4000/match", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(sessionTokenForHeader ? { "Authorization": `Bearer ${sessionTokenForHeader}` } : {})
+          "Authorization": `Bearer ${sessionToken}`
         },
         body: JSON.stringify({
           userName,

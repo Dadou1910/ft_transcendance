@@ -33,10 +33,21 @@ export function renderWelcomePage(onRegister: () => void, onLogin: () => void): 
 
 // Sets up event listeners for the welcome page buttons
 export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
-  const registerButton = document.getElementById("registerButton") as HTMLButtonElement;
-  const loginButton = document.getElementById("loginButton") as HTMLButtonElement;
-  registerButton.addEventListener("click", onRegister);
-  loginButton.addEventListener("click", onLogin);
+  let registerButton = document.getElementById("registerButton") as HTMLButtonElement;
+  let loginButton = document.getElementById("loginButton") as HTMLButtonElement;
+  // Remove old listeners by replacing with clone
+  if (registerButton) {
+    const newRegisterButton = registerButton.cloneNode(true) as HTMLButtonElement;
+    registerButton.parentNode?.replaceChild(newRegisterButton, registerButton);
+    registerButton = newRegisterButton;
+    registerButton.addEventListener("click", onRegister);
+  }
+  if (loginButton) {
+    const newLoginButton = loginButton.cloneNode(true) as HTMLButtonElement;
+    loginButton.parentNode?.replaceChild(newLoginButton, loginButton);
+    loginButton = newLoginButton;
+    loginButton.addEventListener("click", onLogin);
+  }
 }
 
 // ------------------------------------------
@@ -44,11 +55,14 @@ export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
 // ------------------------------------------
 // Renders the post-login welcome page with user info and game options
 export function renderLoggedInWelcomePage(
+  onLogout: () => void,
   username: string,
   email: string,
+  onPlayMatch: (mode: string) => void,
+  onPlayTournament: () => void,
+  onSettings: () => void,
   avatarUrl?: string
 ): string {
-  const avatarSrc = avatarUrl || '';
   return `
     <div class="logged-in-container">
       <button id="toggleSidebarButton" class="toggle-button">
@@ -56,12 +70,15 @@ export function renderLoggedInWelcomePage(
       </button>
       <div id="sidebar" class="sidebar">
         <img
-          src="${avatarSrc}"
+          src="${avatarUrl || ''}"
           class="avatar"
-          ${avatarSrc ? '' : 'style="background-color: black;"'}
+          ${avatarUrl ? '' : 'style="background-color: black;"'}
         />
         <h2 class="sidebar-username">${username}</h2>
         <p class="sidebar-email">${email}</p>
+        <div class="sidebar-friend-search">
+          <input type="text" id="friendSearchInput" class="form-input" placeholder="search for friends" style="font-style: italic;" onfocus="this.style.fontStyle='normal'" onblur="if(!this.value)this.style.fontStyle='italic'" />
+        </div>
         <div class="sidebar-links">
           <a id="settingsLink" class="sidebar-link">Settings</a>
           <a class="sidebar-link">Leaderboard</a>
@@ -83,14 +100,12 @@ export function renderLoggedInWelcomePage(
               <option value="neonCity">Neon City Pong</option>
               <option value="ai">AI Pong</option>
               <option value="spaceBattle">Space Battle</option>
+              <option value="multiplayer">Multiplayer</option>
             </select>
             <button id="playMatchButton" class="action-button">
               Play Match
             </button>
           </div>
-          <button id="playMultiplayerButton" class="action-button">
-            Play Multiplayer
-          </button>
         </div>
         <div class="about-pong">
           <h2 class="about-title">
@@ -112,69 +127,217 @@ export function renderLoggedInWelcomePage(
 export function setupLoggedInWelcomePage(
   onLogout: () => void,
   username: string,
-  onPlayMatch: () => void,
+  onPlayMatch: (mode: string) => void,
   onPlayTournament: () => void,
   onSettings: () => void,
   navigate: (path: string) => void
 ) {
-  const logoutLink = document.getElementById("logoutLink");
-  const settingsLink = document.getElementById("settingsLink");
-  const profileLink = document.getElementById("profileLink");
-  const playMatchButton = document.getElementById("playMatchButton");
-  const playTournamentButton = document.getElementById("playTournamentButton");
-  const playMultiplayerButton = document.getElementById("playMultiplayerButton");
-  const gameModeSelect = document.getElementById("gameModeSelect");
-  const toggleSidebarButton = document.getElementById("toggleSidebarButton");
-  const sidebar = document.getElementById("sidebar");
+  let logoutLink = document.getElementById("logoutLink");
+  let settingsLink = document.getElementById("settingsLink");
+  let profileLink = document.getElementById("profileLink");
+  let playMatchButton = document.getElementById("playMatchButton");
+  let playTournamentButton = document.getElementById("playTournamentButton");
+  let gameModeSelect = document.getElementById("gameModeSelect");
+  let toggleSidebarButton = document.getElementById("toggleSidebarButton");
+  let sidebar = document.getElementById("sidebar");
 
+  // Remove old listeners by replacing with clone
   if (logoutLink) {
+    const newLogoutLink = logoutLink.cloneNode(true) as HTMLElement;
+    logoutLink.parentNode?.replaceChild(newLogoutLink, logoutLink);
+    logoutLink = newLogoutLink;
     logoutLink.addEventListener("click", (e) => {
       e.preventDefault();
       onLogout();
     });
   }
-
   if (settingsLink) {
+    const newSettingsLink = settingsLink.cloneNode(true) as HTMLElement;
+    settingsLink.parentNode?.replaceChild(newSettingsLink, settingsLink);
+    settingsLink = newSettingsLink;
     settingsLink.addEventListener("click", (e) => {
       e.preventDefault();
       onSettings();
     });
   }
-
   if (profileLink) {
+    const newProfileLink = profileLink.cloneNode(true) as HTMLElement;
+    profileLink.parentNode?.replaceChild(newProfileLink, profileLink);
+    profileLink = newProfileLink;
     profileLink.addEventListener("click", (e) => {
       e.preventDefault();
       navigate("/profile");
     });
   }
-
   if (playMatchButton && gameModeSelect) {
+    const newPlayMatchButton = playMatchButton.cloneNode(true) as HTMLElement;
+    playMatchButton.parentNode?.replaceChild(newPlayMatchButton, playMatchButton);
+    playMatchButton = newPlayMatchButton;
     playMatchButton.addEventListener("click", (e) => {
       e.preventDefault();
-      onPlayMatch();
+      const selectedMode = (gameModeSelect as HTMLSelectElement).value;
+      if (selectedMode === "multiplayer") {
+        navigate("/multiplayer");
+        return;
+      }
+      onPlayMatch(selectedMode);
     });
   }
-
   if (playTournamentButton) {
+    const newPlayTournamentButton = playTournamentButton.cloneNode(true) as HTMLElement;
+    playTournamentButton.parentNode?.replaceChild(newPlayTournamentButton, playTournamentButton);
+    playTournamentButton = newPlayTournamentButton;
     playTournamentButton.addEventListener("click", (e) => {
       e.preventDefault();
       onPlayTournament();
     });
   }
-
   if (toggleSidebarButton && sidebar) {
+    const newToggleSidebarButton = toggleSidebarButton.cloneNode(true) as HTMLElement;
+    toggleSidebarButton.parentNode?.replaceChild(newToggleSidebarButton, toggleSidebarButton);
+    toggleSidebarButton = newToggleSidebarButton;
     toggleSidebarButton.addEventListener("click", () => {
       sidebar.classList.toggle("visible");
     });
-
     document.addEventListener("click", (e) => {
       const target = e.target as Node;
       if (
         sidebar.classList.contains("visible") &&
         !sidebar.contains(target) &&
-        !toggleSidebarButton.contains(target)
+        toggleSidebarButton && !toggleSidebarButton.contains(target)
       ) {
         sidebar.classList.remove("visible");
+      }
+    });
+  }
+
+  // Friend search logic
+  const friendSearchInput = document.getElementById("friendSearchInput") as HTMLInputElement;
+  let friendSearchDropdown: HTMLDivElement | null = null;
+  // Helper to track if dropdown should stay open
+  let dropdownShouldStayOpen = false;
+
+  if (friendSearchInput) {
+    // Remove any previous dropdown
+    const removeDropdown = () => {
+      if (friendSearchDropdown && friendSearchDropdown.parentElement) {
+        friendSearchDropdown.parentElement.removeChild(friendSearchDropdown);
+        friendSearchDropdown = null;
+      }
+      dropdownShouldStayOpen = false;
+    };
+
+    friendSearchInput.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && friendSearchInput.value.trim()) {
+        e.preventDefault();
+        removeDropdown();
+        const searchName = friendSearchInput.value.trim();
+        friendSearchInput.disabled = true;
+        try {
+          const sessionToken = localStorage.getItem("sessionToken");
+          const res = await fetch(`http://localhost:4000/users/search?name=${encodeURIComponent(searchName)}`, {
+            headers: sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}
+          });
+          const data = await res.json();
+          if (data && data.user && data.user.name !== username) {
+            // Show dropdown with Add Friend button
+            friendSearchDropdown = document.createElement("div");
+            friendSearchDropdown.className = "friend-search-dropdown";
+            friendSearchDropdown.style.position = "absolute";
+            friendSearchDropdown.style.background = "#222";
+            friendSearchDropdown.style.color = "#fff";
+            friendSearchDropdown.style.border = "1px solid #444";
+            friendSearchDropdown.style.zIndex = "1000";
+            friendSearchDropdown.style.left = friendSearchInput.offsetLeft + "px";
+            friendSearchDropdown.style.top = (friendSearchInput.offsetTop + friendSearchInput.offsetHeight) + "px";
+            friendSearchDropdown.style.width = friendSearchInput.offsetWidth + "px";
+            friendSearchDropdown.innerHTML = `
+              <div style="padding: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span>${data.user.name}</span>
+                <button id="addFriendBtn" class="form-button" style="margin-left: 8px;">Add Friend</button>
+              </div>
+            `;
+            friendSearchInput.parentElement!.appendChild(friendSearchDropdown);
+            dropdownShouldStayOpen = true;
+            const addFriendBtn = friendSearchDropdown.querySelector("#addFriendBtn") as HTMLButtonElement;
+            addFriendBtn.addEventListener("click", async () => {
+              addFriendBtn.disabled = true;
+              addFriendBtn.textContent = "Adding...";
+              try {
+                const addRes = await fetch("http://localhost:4000/friends/add", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${sessionToken}`
+                  },
+                  body: JSON.stringify({ friendId: data.user.id })
+                });
+                const addData = await addRes.json();
+                if (addRes.ok && addData.status === "Friend added") {
+                  addFriendBtn.textContent = "Added!";
+                  setTimeout(() => {
+                    removeDropdown();
+                    friendSearchInput.value = "";
+                  }, 1000);
+                } else {
+                  addFriendBtn.textContent = addData.error || addData.status || "Error";
+                  setTimeout(removeDropdown, 2000);
+                }
+              } catch (err) {
+                addFriendBtn.textContent = "Error";
+                setTimeout(removeDropdown, 2000);
+              }
+            });
+          } else if (data && data.user && data.user.name === username) {
+            // Can't add yourself
+            friendSearchDropdown = document.createElement("div");
+            friendSearchDropdown.className = "friend-search-dropdown";
+            friendSearchDropdown.style.position = "absolute";
+            friendSearchDropdown.style.background = "#222";
+            friendSearchDropdown.style.color = "#fff";
+            friendSearchDropdown.style.border = "1px solid #444";
+            friendSearchDropdown.style.zIndex = "1000";
+            friendSearchDropdown.style.left = friendSearchInput.offsetLeft + "px";
+            friendSearchDropdown.style.top = (friendSearchInput.offsetTop + friendSearchInput.offsetHeight) + "px";
+            friendSearchDropdown.style.width = friendSearchInput.offsetWidth + "px";
+            friendSearchDropdown.innerHTML = `<div style="padding: 8px;">You can't add yourself.</div>`;
+            friendSearchInput.parentElement!.appendChild(friendSearchDropdown);
+            dropdownShouldStayOpen = false;
+            setTimeout(removeDropdown, 2000);
+          } else {
+            // Not found
+            friendSearchDropdown = document.createElement("div");
+            friendSearchDropdown.className = "friend-search-dropdown";
+            friendSearchDropdown.style.position = "absolute";
+            friendSearchDropdown.style.background = "#222";
+            friendSearchDropdown.style.color = "#fff";
+            friendSearchDropdown.style.border = "1px solid #444";
+            friendSearchDropdown.style.zIndex = "1000";
+            friendSearchDropdown.style.left = friendSearchInput.offsetLeft + "px";
+            friendSearchDropdown.style.top = (friendSearchInput.offsetTop + friendSearchInput.offsetHeight) + "px";
+            friendSearchDropdown.style.width = friendSearchInput.offsetWidth + "px";
+            friendSearchDropdown.innerHTML = `<div style="padding: 8px;">No user found.</div>`;
+            friendSearchInput.parentElement!.appendChild(friendSearchDropdown);
+            dropdownShouldStayOpen = false;
+            setTimeout(removeDropdown, 2000);
+          }
+        } catch (err) {
+          removeDropdown();
+        } finally {
+          friendSearchInput.disabled = false;
+        }
+      }
+    });
+    // Remove dropdown on blur, but only if it shouldn't stay open
+    friendSearchInput.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (!dropdownShouldStayOpen) removeDropdown();
+      }, 200);
+    });
+    // Remove dropdown if clicking outside
+    document.addEventListener("mousedown", (e) => {
+      if (friendSearchDropdown && !friendSearchDropdown.contains(e.target as Node) && e.target !== friendSearchInput) {
+        removeDropdown();
       }
     });
   }
@@ -715,7 +878,8 @@ export function renderProfilePage(
   avatarUrl: string | undefined,
   playerStats: PlayerStats,
   matchHistory: MatchRecord[],
-  gameStats: Record<string, GameStats>
+  gameStats: Record<string, GameStats>,
+  friends: { id: number, name: string, online: boolean }[]
 ): string {
   // Calculate total games and win rate from all game types combined
   let totalWins = 0;
@@ -730,9 +894,6 @@ export function renderProfilePage(
     ? ((totalWins / totalGames) * 100).toFixed(1)
     : "0.0";
 
-  // Get the last 5 matches
-  const recentMatches = matchHistory.slice(0, 5);
-
   return `
     <div class="profile-page">
       <div class="profile-header" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
@@ -742,8 +903,8 @@ export function renderProfilePage(
             class="profile-avatar"
           />
           <div class="profile-text-info">
-            <h1 class="profile-username">${username}</h1>
-            <p class="profile-email">${email}</p>
+            <h1 class="profile-username">${escapeHtml(username)}</h1>
+            <p class="profile-email">${escapeHtml(email)}</p>
           </div>
         </div>
         <div class="profile-quick-stats">
@@ -768,7 +929,7 @@ export function renderProfilePage(
           <div class="game-stats-grid">
             ${Object.entries(gameStats).map(([gameType, stats]) => `
               <div class="game-type-stats">
-                <h3>${gameType}</h3>
+                <h3>${escapeHtml(gameType === 'Online Pong' ? 'Online Pong (Multiplayer)' : gameType)}</h3>
                 <canvas id="${gameType.replace(/\s+/g, '-').toLowerCase()}-chart" width="200" height="250"></canvas>
                 <div class="game-type-details">
                   <p>Games Played: ${stats.gamesPlayed}</p>
@@ -780,22 +941,61 @@ export function renderProfilePage(
           </div>
         </div>
 
-        <div class="profile-section match-history-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
-          <h2>Recent Matches</h2>
-          <div class="match-history-list">
-            ${recentMatches.length > 0 ? recentMatches.map(match => `
-              <div class="match-history-item ${match.winner === username ? 'victory' : 'defeat'}">
-                <div class="match-result">${match.winner === username ? 'Victory' : 'Defeat'}</div>
-                <div class="match-players">
-                  <span class="${match.winner === username ? 'winner' : 'loser'}">${username}</span>
-                  <span class="vs">vs</span>
-                  <span class="${match.winner === username ? 'loser' : 'winner'}">${match.winner === username ? match.loser : match.winner}</span>
-                </div>
-                <div class="match-date">${new Date(match.timestamp).toLocaleDateString()}</div>
-              </div>
-            `).join('') : `
-              <div class="no-matches">No recent matches found</div>
-            `}
+        <div class="profile-section friends-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
+          <h2>Friends</h2>
+          <div class="friends-list">
+            ${friends && friends.length > 0
+              ? `<ul class="friends-list">${friends.map(friend => `
+                  <li class="friend-item" style="
+                    display: inline-block;
+                    margin: 4px 8px 4px 0;
+                    padding: 6px 16px 6px 16px;
+                    background: linear-gradient(90deg, #f4c2c2 0%, #d8a8b5 100%);
+                    color: #222;
+                    border-radius: 20px;
+                    font-weight: 500;
+                    font-size: 1rem;
+                    box-shadow: 0 2px 8px rgba(244, 194, 194, 0.15);
+                    position: relative;
+                  ">
+                    <span>${escapeHtml(friend.name)}</span>
+                    <span style="
+                      display: inline-block;
+                      width: 10px;
+                      height: 10px;
+                      border-radius: 50%;
+                      background: ${friend.online ? '#22c55e' : '#ef4444'};
+                      margin-left: 10px;
+                      vertical-align: middle;
+                      box-shadow: 0 0 4px ${friend.online ? '#22c55e' : '#ef4444'}44;
+                    "></span>
+                  </li>`).join('')}</ul>`
+              : `<div class="no-friends">No friends yet.</div>`}
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <h2>Match History</h2>
+          <div class="match-history-scroll">
+            <ul class="match-history-list">
+              ${matchHistory.length === 0
+                ? `<li class="no-matches">No matches played yet.</li>`
+                : matchHistory
+                    .map(
+                      (match) => `
+                        <li class="match-history-item ${match.winner === username ? 'victory' : 'defeat'}">
+                          <div class="match-result">${match.winner === username ? 'Victory' : 'Defeat'}</div>
+                          <div class="match-players">
+                            <span class="winner">${escapeHtml(match.winner)}</span>
+                            <span class="vs">vs</span>
+                            <span class="loser">${escapeHtml(match.loser)}</span>
+                          </div>
+                          <div class="match-date">${new Date(match.timestamp).toLocaleString()}</div>
+                        </li>
+                      `
+                    )
+                    .join('')}
+            </ul>
           </div>
         </div>
       </div>
@@ -804,9 +1004,7 @@ export function renderProfilePage(
 }
 
 function setupGameChart(canvas: HTMLCanvasElement, gameType: string): void {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
+  const ctx = canvas.getContext('2d')!;
   // Get game stats from the canvas's parent element
   const statsContainer = canvas.closest('.game-type-stats');
   if (!statsContainer) return;
@@ -839,11 +1037,7 @@ function setupGameChart(canvas: HTMLCanvasElement, gameType: string): void {
   ctx.lineTo(100, 100);
   ctx.fill();
 
-  // Add only the game type name
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 16px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText(gameType, 100, 210);
+  // Removed game type label under the chart for cleaner look
 }
 
 export function setupProfilePage(onBack: () => void): void {
@@ -854,12 +1048,178 @@ export function setupProfilePage(onBack: () => void): void {
   }
 
   // Setup charts for each game type
-  const gameTypes = ["Pong", "Neon City Pong", "AI Pong", "Space Battle"];
-  gameTypes.forEach(gameType => {
-    const canvasId = `${gameType.replace(/\s+/g, '-').toLowerCase()}-chart`;
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    if (canvas) {
-      setupGameChart(canvas, gameType);
-    }
+  // Dynamically find all chart canvases and set up their charts, including Online Pong
+  const chartCanvases = document.querySelectorAll(".game-type-stats canvas");
+  chartCanvases.forEach((canvas) => {
+    const id = canvas.id;
+    // Extract game type from id
+    let gameType = id.replace(/-chart$/, '').replace(/-/g, ' ');
+    // Capitalize each word
+    gameType = gameType.replace(/\b\w/g, c => c.toUpperCase());
+    if (gameType === 'Online Pong') gameType = 'Online Pong';
+    setupGameChart(canvas as HTMLCanvasElement, gameType);
   });
+}
+
+// Renders the multiplayer menu with matchmaking and invite options
+export function renderMultiplayerMenu(): string {
+  return `
+    <div class="full-screen-container">
+      <div class="welcome-container">
+        <h1 class="neon-title">
+          Multiplayer Pong
+        </h1>
+        <p class="welcome-subtitle">
+          Play against other players online
+        </p>
+        <div class="flex flex-col gap-4">
+          <button id="matchmakingButton" class="welcome-button">
+            Matchmaking
+          </button>
+          <button id="inviteFriendButton" class="welcome-button">
+            Invite Friend
+          </button>
+          <button id="backButton" class="welcome-button">
+            Back
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Sets up event listeners for the multiplayer menu
+export function setupMultiplayerMenu(navigate: (path: string) => void): void {
+  const matchmakingButton = document.getElementById("matchmakingButton");
+  const inviteFriendButton = document.getElementById("inviteFriendButton");
+  const backButton = document.getElementById("backButton");
+
+  if (matchmakingButton) {
+    matchmakingButton.addEventListener("click", async () => {
+      // Start matchmaking
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (!sessionToken) {
+        alert("You must be logged in to play multiplayer.");
+        navigate("/login");
+        return;
+      }
+      
+      try {
+        // Join matchmaking
+        const response = await fetch("http://localhost:4000/matchmaking/join", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${sessionToken}` },
+        });
+        
+        if (!response.ok) {
+          throw new Error("Failed to join matchmaking");
+        }
+        
+        const data = await response.json();
+        console.log("Matchmaking join response:", data);
+        
+        // Always show waiting UI first unless explicitly paired
+        const app = document.getElementById("app");
+        if (app) app.innerHTML = renderWaitingForOpponent();
+        let polling = true;
+        
+        setupWaitingForOpponent(() => {
+          polling = false;
+          navigate("/multiplayer");
+        });
+
+        // Only navigate to game if explicitly paired with a match ID
+        if (data.status === "ready" && data.matchId) {
+          navigate(`/multiplayerGame/${data.matchId}`);
+          return;
+        }
+
+        // Otherwise, start polling for match
+        const userId = data.userId;
+        if (!userId) {
+          throw new Error("No user ID received from matchmaking");
+        }
+
+        const poll = async () => {
+          if (!polling) return;
+          try {
+            const statusRes = await fetch(`http://localhost:4000/matchmaking/status/${userId}`, {
+              headers: { "Authorization": `Bearer ${sessionToken}` },
+            });
+            
+            if (!statusRes.ok) {
+              throw new Error("Failed to get matchmaking status");
+            }
+            
+            const status = await statusRes.json();
+            console.log("Matchmaking status:", status);
+            
+            if (status.status === "ready" && status.matchId) {
+              navigate(`/multiplayerGame/${status.matchId}`);
+            } else {
+              setTimeout(poll, 2000);
+            }
+          } catch (error) {
+            console.error("Error polling matchmaking status:", error);
+            polling = false;
+            navigate("/multiplayer");
+          }
+        };
+        
+        poll();
+      } catch (error) {
+        console.error("Matchmaking error:", error);
+        alert("Failed to join matchmaking. Please try again.");
+        navigate("/multiplayer");
+      }
+    });
+  }
+
+  if (inviteFriendButton) {
+    inviteFriendButton.addEventListener("click", () => {
+      alert("Friend invites coming soon!");
+    });
+  }
+
+  if (backButton) {
+    backButton.addEventListener("click", () => {
+      navigate("/");
+    });
+  }
+}
+
+// Renders the waiting for opponent UI
+export function renderWaitingForOpponent(): string {
+  return `
+    <div class="full-screen-container">
+      <div class="welcome-container">
+        <h1 class="neon-title">Waiting for Opponent...</h1>
+        <p class="welcome-subtitle">Another player will join soon.</p>
+        <div class="flex flex-col gap-4">
+          <button id="cancelMatchmakingButton" class="welcome-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function setupWaitingForOpponent(onCancel: () => void) {
+  const cancelButton = document.getElementById("cancelMatchmakingButton");
+  if (cancelButton) {
+    cancelButton.addEventListener("click", onCancel);
+  }
+}
+
+export function escapeHtml(str: string): string {
+  // Check if the string contains any HTML tags or script tags
+  if (/<[^>]*>|<\/[^>]*>|javascript:|on\w+\s*=/.test(str)) {
+    return "Nice try! 😄";
+  }
+  return String(str).replace(/[&<>'"]/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[c]!));
 }

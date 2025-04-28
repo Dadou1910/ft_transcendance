@@ -18,6 +18,10 @@ import {
   setupTournamentEnd,
   renderProfilePage,
   setupProfilePage,
+  renderMultiplayerMenu,
+  setupMultiplayerMenu,
+  renderWaitingForOpponent,
+  setupWaitingForOpponent,
 } from "./ui.js";
 // Imports Tournament class for managing tournament logic
 import { Tournament } from "./tournament.js";
@@ -35,6 +39,8 @@ import { Bracket } from "./bracket.js";
 import { StatsManager, Player, GameStats, MatchRecord } from "./stats.js";
 // Imports SettingsView class
 import { SettingsView } from "./settings.js";
+// Imports MultiplayerPongGame class
+import { MultiplayerPongGame } from "./multiplayer.js";
 
 // Initializes StatsManager for tracking player stats
 const statsManager = new StatsManager();
@@ -83,11 +89,96 @@ async function getCurrentUser(): Promise<{ id: number; username: string; email: 
 router.addRoute("/", async () => {
   const currentUser = await getCurrentUser();
   if (currentUser) {
-    return renderLoggedInWelcomePage(
+    const html = renderLoggedInWelcomePage(
+      async () => {
+        // Logout callback
+        try {
+          await fetch('/api/logout', { method: 'POST' });
+          router.navigate('/');
+        } catch (error) {
+          console.error('Logout failed:', error);
+        }
+      },
       currentUser.username,
       currentUser.email,
+      (mode: string) => {
+        tournament.addPlayers([currentUser.username, "Player 2"]);
+        isTournamentMode = false;
+      },
+      () => router.navigate('/tournament'),
+      () => router.navigate('/settings'),
       currentUser.avatarUrl
     );
+    setTimeout(() => {
+      setupLoggedInWelcomePage(
+        async () => {
+          // Logout callback
+          const sessionToken = localStorage.getItem("sessionToken");
+          if (sessionToken) {
+            try {
+              await fetch("http://localhost:4000/logout", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${sessionToken}` }
+              });
+            } catch (error) {
+              console.error("Logout error:", error);
+            }
+          }
+          localStorage.removeItem("sessionToken");
+          router.navigate("/");
+        },
+        currentUser.username,
+        (mode: string) => {
+          tournament.addPlayers([currentUser.username, "Player 2"]);
+          isTournamentMode = false;
+          if (mode === "standard") {
+            router.navigate("/game");
+          } else if (mode === "neonCity") {
+            router.navigate("/neonCityGame");
+          } else if (mode === "ai") {
+            router.navigate("/aiGame");
+          } else if (mode === "spaceBattle") {
+            router.navigate("/spaceBattleGame");
+          }
+        },
+        () => {
+          // Play Tournament callback
+          tournament.clearPlayers();
+          router.navigate("/tournament");
+        },
+        () => {
+          // Settings callback
+          router.navigate("/settings");
+        },
+        (path: string) => router.navigate(path)
+      );
+      // --- Presence WebSocket connection ---
+      let presenceSocket: WebSocket | null = null;
+      function connectPresenceWS() {
+        const sessionToken = localStorage.getItem("sessionToken");
+        if (!sessionToken) return;
+        const wsUrl = `ws://localhost:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
+        presenceSocket = new WebSocket(wsUrl);
+        presenceSocket.onopen = () => {
+          // Optionally, send a ping or log
+          // console.log("Presence WebSocket connected");
+        };
+        presenceSocket.onclose = () => {
+          // Try to reconnect after a short delay
+          setTimeout(connectPresenceWS, 2000);
+        };
+        presenceSocket.onerror = () => {
+          // Close and reconnect on error
+          if (presenceSocket) presenceSocket.close();
+        };
+      }
+      connectPresenceWS();
+      // Optionally, close on logout or navigation
+      window.addEventListener("beforeunload", () => {
+        if (presenceSocket) presenceSocket.close();
+      });
+    }, 0);
+    return html;
   } else {
     return renderWelcomePage(
       () => router.navigate("/register"),
@@ -425,34 +516,90 @@ async function handleGameRoute(): Promise<string> {
 
 // Defines standard game route ("/game")
 router.addRoute("/game", () => {
-  // Since addRoute expects a synchronous string return, we call the async handler
-  // and immediately return a placeholder string. The actual rendering is handled
-  // by the async function.
-  handleGameRoute().then(html => {
-    const appContainer = document.getElementById("app");
-    if (appContainer) {
-      appContainer.innerHTML = html;
-    }
-  }).catch(error => {
-    console.error("Error in /game route:", error);
-    router.navigate("/"); // Redirect to root on error
-  });
-  return ""; // Return placeholder string synchronously
-});
-
-// Defines neon city game route ("/neonCityGame")
-router.addRoute("/neonCityGame", () => {
-  // Redirects to root if no players are in the tournament
   if (!tournament.hasPlayers()) {
     router.navigate("/");
     return "";
   }
   let left: string, right: string;
-  // Uses default players (non-tournament mode only)
   [left, right] = tournament.getPlayers();
-  // Renders game view (without tournament round information)
   const html = renderGameView(left, right);
-  // Initializes NeonCityPong instance (without onGameEnd callback)
+  setTimeout(() => {
+    gameInstance = new PongGame(
+      left,
+      right,
+      "pongCanvas",
+      "speedSlider",
+      "backgroundColorSelect",
+      "scoreLeft",
+      "scoreRight",
+      "restartButton",
+      "settingsButton",
+      "settingsMenu",
+      "settingsContainer",
+      statsManager,
+      statsManager.getCurrentUser()?.username || null,
+      undefined,
+      navigate
+    );
+  }, 0);
+  return html;
+});
+
+// Add game routes
+router.addRoute('/game/neon', async () => {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    router.navigate('/login');
+    return '';
+  }
+  return renderGameView(currentUser.username, 'Player 2');
+});
+
+router.addRoute('/game/space', async () => {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    router.navigate('/login');
+    return '';
+  }
+  return renderGameView(currentUser.username, 'Player 2');
+});
+
+router.addRoute('/game/ai', async () => {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    router.navigate('/login');
+    return '';
+  }
+  return renderGameView(currentUser.username, 'AI Opponent');
+});
+
+router.addRoute('/game/multiplayer', async () => {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    router.navigate('/login');
+    return '';
+  }
+  return renderMultiplayerMenu();
+});
+
+router.addRoute('/game/classic', async () => {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    router.navigate('/login');
+    return '';
+  }
+  return renderGameView(currentUser.username, 'Player 2');
+});
+
+// Defines neon city game route ("/neonCityGame")
+router.addRoute("/neonCityGame", () => {
+  if (!tournament.hasPlayers()) {
+    router.navigate("/");
+    return "";
+  }
+  let left: string, right: string;
+  [left, right] = tournament.getPlayers();
+  const html = renderGameView(left, right);
   setTimeout(() => {
     gameInstance = new NeonCityPong(
       left,
@@ -469,7 +616,7 @@ router.addRoute("/neonCityGame", () => {
       statsManager,
       statsManager.getCurrentUser()?.username || null,
       navigate,
-      undefined // No onGameEnd callback since this route doesn't support tournament mode
+      undefined
     );
   }, 0);
   return html;
@@ -502,7 +649,6 @@ router.addRoute("/aiGame", () => {
       undefined,
       navigate
     );
-    // No need to call resizeCanvas or start; handled in constructor
   }, 0);
   return html;
 });
@@ -514,7 +660,6 @@ router.addRoute("/spaceBattleGame", () => {
     return "";
   }
   let left: string, right: string;
-  // Uses default players (non-tournament mode only)
   [left, right] = tournament.getPlayers();
   const html = renderGameView(left, right);
   setTimeout(() => {
@@ -533,9 +678,17 @@ router.addRoute("/spaceBattleGame", () => {
       statsManager,
       statsManager.getCurrentUser()?.username || null,
       navigate,
-      undefined // No onGameEnd callback since this route doesn't support tournament mode
+      undefined
     );
-    // No need to call resizeCanvas or start; handled in constructor
+  }, 0);
+  return html;
+});
+
+// Add multiplayer route
+router.addRoute("/multiplayer", () => {
+  const html = renderMultiplayerMenu();
+  setTimeout(() => {
+    setupMultiplayerMenu((path) => router.navigate(path));
   }, 0);
   return html;
 });
@@ -559,6 +712,7 @@ router.addRoute("/settings", () => {
 });
 
 // Add profile route
+let profilePollingInterval: ReturnType<typeof setInterval> | null = null;
 router.addRoute("/profile", async () => {
   const currentUser = await getCurrentUser();
   if (!currentUser) {
@@ -567,24 +721,30 @@ router.addRoute("/profile", async () => {
   }
 
   const sessionToken = localStorage.getItem("sessionToken");
-  try {
+  let latestFriends: any[] = [];
+  let latestHtml = "";
+  let playerStats: any = {};
+  let matchHistory: any[] = [];
+  let gameStats: Record<string, any> = {};
+
+  async function fetchAndRenderProfile() {
+    try {
+      if (!currentUser) {
+        router.navigate("/login");
+        return;
+      }
     const response = await fetch(`http://localhost:4000/profile/me`, {
       headers: { "Authorization": `Bearer ${sessionToken}` }
     });
-    
-    if (!response.ok) {
-      throw new Error("Failed to fetch profile data");
-    }
-
-    const { user, matches } = await response.json();
-    const playerStats = {
+      if (!response.ok) throw new Error("Failed to fetch profile data");
+      const { user, matches, friends } = await response.json();
+      latestFriends = friends;
+      playerStats = {
       wins: user.wins || 0,
       losses: user.losses || 0,
       tournamentsWon: user.tournamentsWon || 0
     };
-
-    // Group matches by game type for current session stats
-    const gameStats: Record<string, GameStats> = {};
+      gameStats = {};
     matches.forEach((match: any) => {
       const { gameType, userName, opponentName, userScore, opponentScore } = match;
       if (!gameStats[gameType]) {
@@ -605,36 +765,355 @@ router.addRoute("/profile", async () => {
         gameStats[gameType].losses++;
       }
     });
-
-    // Convert matches to MatchRecord format
-    const matchHistory: MatchRecord[] = matches.map((match: any) => ({
+      matchHistory = matches.map((match: any) => ({
       winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
       loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
       timestamp: match.date
     }));
-
-    const html = renderProfilePage(
+      latestHtml = renderProfilePage(
       currentUser.username,
       currentUser.email,
       currentUser.avatarUrl,
       playerStats,
       matchHistory,
-      gameStats
+        gameStats,
+        latestFriends
     );
-
-    // Setup profile page after the HTML is rendered
+      const appContainer = document.getElementById("app");
+      if (appContainer) {
+        appContainer.innerHTML = latestHtml;
     setTimeout(() => {
       setupProfilePage(() => {
         router.navigate("/welcome");
       });
     }, 0);
-
-    return html;
+      }
   } catch (error) {
     console.error("Error fetching profile data:", error);
     router.navigate("/welcome");
+    }
+  }
+
+  // Initial render
+  await fetchAndRenderProfile();
+
+  // Start polling every 5 seconds
+  if (profilePollingInterval) clearInterval(profilePollingInterval);
+  profilePollingInterval = setInterval(fetchAndRenderProfile, 5000);
+
+  // Clear polling when navigating away
+  window.addEventListener("popstate", () => {
+    if (profilePollingInterval) clearInterval(profilePollingInterval);
+    profilePollingInterval = null;
+  }, { once: true });
+
+  return latestHtml;
+});
+
+// Add multiplayer game route
+router.addRoute("/multiplayerGame/:matchId", async () => {
+  // Extract matchId from the URL
+  const matchId = window.location.pathname.split("/").pop();
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !matchId) {
+    router.navigate("/");
     return "";
   }
+  // Render the standard Pong game view with placeholder names
+  const html = renderGameView(currentUser.username, "Waiting for opponent...");
+  setTimeout(() => {
+    // Connect to WebSocket
+    const sessionToken = localStorage.getItem("sessionToken");
+    if (!sessionToken) {
+      alert("Session token not found. Please log in again.");
+      navigate("/login");
+      return;
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.hostname}:4000/ws/match/${matchId}?token=${encodeURIComponent(sessionToken)}`);
+    
+    let localPlayerReady = false;
+    let remotePlayerReady = false;
+    let isHost = false;
+    let assigned = false;
+    let opponentName = "Waiting for opponent...";
+    let multiplayerGame: MultiplayerPongGame | null = null;
+
+    // Store event listener references for cleanup
+    const keydownListener = (e: KeyboardEvent) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        ws.send(JSON.stringify({
+          type: "paddle",
+          key: e.key,
+          pressed: true,
+        }));
+      }
+    };
+
+    const keyupListener = (e: KeyboardEvent) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        ws.send(JSON.stringify({
+          type: "paddle",
+          key: e.key,
+          pressed: false,
+        }));
+      }
+    };
+
+    // Function to handle game start
+    const startGame = () => {
+      if (!multiplayerGame) return;
+      console.log('[DEBUG] Start button clicked. localPlayerReady:', localPlayerReady);
+      if (!localPlayerReady) {
+      localPlayerReady = true;
+        multiplayerGame.restartButton.textContent = 'Waiting for opponent...';
+        multiplayerGame.restartButton.disabled = true;
+        ws.send(JSON.stringify({ type: 'ready' }));
+        console.log('[DEBUG] Sent ready message to backend');
+      }
+    };
+
+    ws.onopen = () => {
+      // Send a join message to get assigned
+      ws.send(JSON.stringify({ type: "join", user: currentUser.username }));
+      // Show start button immediately
+      if (multiplayerGame) {
+        multiplayerGame.restartButton.style.display = "block";
+        multiplayerGame.restartButton.textContent = "Start";
+        multiplayerGame.restartButton.disabled = false;
+      }
+      console.log('[DEBUG] WebSocket connection opened');
+    };
+
+    ws.onclose = (event) => {
+      console.log('[DEBUG] WebSocket closed:', event);
+    };
+
+    ws.onerror = (event) => {
+      console.log('[DEBUG] WebSocket error:', event);
+    };
+
+    ws.onmessage = async (event) => {
+      let raw = event.data;
+      if (raw instanceof Blob) {
+        raw = await raw.text();
+      }
+      let msg;
+      try {
+        msg = JSON.parse(raw);
+      } catch (e) {
+        console.log('[DEBUG] Failed to parse WebSocket message', raw);
+        return;
+      }
+      console.log('[DEBUG] WebSocket message received:', msg);
+      if (msg.type === "game_start") {
+        console.log('[DEBUG] >>> RECEIVED BACKEND game_start message <<<', msg);
+      }
+      if (!assigned && msg.type === "assign") {
+        isHost = msg.host;
+        assigned = true;
+        opponentName = msg.opponentName || "Waiting for opponent...";
+        // Robustly set both player names and update both displays
+        if (isHost) {
+          // Host: set own name as left, update left display
+          if (!multiplayerGame) {
+        multiplayerGame = new MultiplayerPongGame(
+              currentUser.username,
+              opponentName,
+          "pongCanvas",
+          "speedSlider",
+          "backgroundColorSelect",
+          "scoreLeft",
+          "scoreRight",
+          "restartButton",
+          "settingsButton",
+          "settingsMenu",
+          "settingsContainer",
+          statsManager,
+          currentUser.username,
+          undefined,
+          navigate
+        );
+        multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+        multiplayerGame.restartButton.style.display = "block";
+        multiplayerGame.restartButton.textContent = "Start";
+        multiplayerGame.restartButton.disabled = false;
+        multiplayerGame.restartButton.onclick = startGame;
+        if (!isHost) {
+          document.addEventListener("keydown", keydownListener);
+          document.addEventListener("keyup", keyupListener);
+        }
+        multiplayerGame.draw();
+        multiplayerGame.attachBackButtonListener(); // Ensure Back button works right away
+        // Ensure cleanup and WebSocket close on navigation
+        const cleanupAndClose = () => {
+          if (multiplayerGame) multiplayerGame.cleanup();
+          if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+          // Notify backend to leave match or queue
+          const sessionToken = localStorage.getItem("sessionToken");
+          if (sessionToken) {
+            fetch("http://localhost:4000/matchmaking/leave", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${sessionToken}` },
+            });
+          }
+        };
+        window.addEventListener("popstate", cleanupAndClose, { once: true });
+        window.addEventListener("beforeunload", cleanupAndClose, { once: true });
+        console.log('[DEBUG] MultiplayerPongGame assigned and draw loop started');
+          }
+          multiplayerGame.playerLeftName = currentUser.username;
+          const leftNameElem = document.getElementById("playerLeftNameDisplay");
+          if (leftNameElem) leftNameElem.textContent = currentUser.username;
+          // If opponentName is present and not placeholder, set and update right
+          if (opponentName && opponentName !== "Waiting for opponent...") {
+            multiplayerGame.playerRightName = opponentName;
+            const rightNameElem = document.getElementById("playerRightNameDisplay");
+            if (rightNameElem) rightNameElem.textContent = opponentName;
+          }
+        } else {
+          // Guest: set own name as right, update right display
+          if (!multiplayerGame) {
+            multiplayerGame = new MultiplayerPongGame(
+              opponentName,
+              currentUser.username,
+              "pongCanvas",
+              "speedSlider",
+              "backgroundColorSelect",
+              "scoreLeft",
+              "scoreRight",
+              "restartButton",
+              "settingsButton",
+              "settingsMenu",
+              "settingsContainer",
+              statsManager,
+              currentUser.username,
+              undefined,
+              navigate
+            );
+            multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+            multiplayerGame.restartButton.style.display = "block";
+            multiplayerGame.restartButton.textContent = "Start";
+            multiplayerGame.restartButton.disabled = false;
+            multiplayerGame.restartButton.onclick = startGame;
+            if (!isHost) {
+              document.addEventListener("keydown", keydownListener);
+              document.addEventListener("keyup", keyupListener);
+            }
+            multiplayerGame.draw();
+            multiplayerGame.attachBackButtonListener(); // Ensure Back button works right away
+            // Ensure cleanup and WebSocket close on navigation
+            const cleanupAndClose = () => {
+              if (multiplayerGame) multiplayerGame.cleanup();
+              if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+              // Notify backend to leave match or queue
+              const sessionToken = localStorage.getItem("sessionToken");
+              if (sessionToken) {
+                fetch("http://localhost:4000/matchmaking/leave", {
+                  method: "POST",
+                  headers: { "Authorization": `Bearer ${sessionToken}` },
+                });
+              }
+            };
+            window.addEventListener("popstate", cleanupAndClose, { once: true });
+            window.addEventListener("beforeunload", cleanupAndClose, { once: true });
+            console.log('[DEBUG] MultiplayerPongGame assigned and draw loop started');
+          }
+          multiplayerGame.playerRightName = currentUser.username;
+          const rightNameElem = document.getElementById("playerRightNameDisplay");
+          if (rightNameElem) rightNameElem.textContent = currentUser.username;
+          // If opponentName is present and not placeholder, set and update left
+          if (opponentName && opponentName !== "Waiting for opponent...") {
+            multiplayerGame.playerLeftName = opponentName;
+            const leftNameElem = document.getElementById("playerLeftNameDisplay");
+            if (leftNameElem) leftNameElem.textContent = opponentName;
+          }
+        }
+      }
+      // Handle opponent join/update
+      else if (multiplayerGame && msg.type === "opponent") {
+        // Always update both name displays for robustness
+        if (multiplayerGame.isHost) {
+          multiplayerGame.playerRightName = msg.name;
+        } else {
+          multiplayerGame.playerLeftName = msg.name;
+        }
+        // Always update both DOM elements
+        const rightNameElem = document.getElementById("playerRightNameDisplay");
+        if (rightNameElem) rightNameElem.textContent = multiplayerGame.playerRightName;
+          const leftNameElem = document.getElementById("playerLeftNameDisplay");
+        if (leftNameElem) leftNameElem.textContent = multiplayerGame.playerLeftName;
+        console.log('[DEBUG] MultiplayerPongGame opponent joined and name updated');
+      }
+      // Handle paddle and state messages for multiplayer
+      else if (multiplayerGame && msg.type === "paddle") {
+        multiplayerGame.handlePaddleMessage(msg);
+      }
+      else if (multiplayerGame && msg.type === "state") {
+        multiplayerGame.handleStateMessage(msg);
+      }
+      // Handle ready state updates
+      else if (msg.type === "ready_state") {
+        console.log('[DEBUG] Handling ready_state:', msg);
+        // Update the start button state based on both players' ready states
+        if (multiplayerGame) {
+          if (msg.hostReady && msg.guestReady) {
+            // Both players are ready, game will start automatically
+            multiplayerGame.restartButton.textContent = 'Starting game...';
+            multiplayerGame.restartButton.disabled = true;
+            console.log('[DEBUG] Both players ready, waiting for game_start');
+          } else if (localPlayerReady) {
+            // Local player is ready but opponent isn't
+            multiplayerGame.restartButton.textContent = 'Waiting for opponent...';
+            multiplayerGame.restartButton.disabled = true;
+            console.log('[DEBUG] Local player ready, waiting for opponent');
+          } else {
+            // Neither player is ready
+            multiplayerGame.restartButton.textContent = 'Start';
+            multiplayerGame.restartButton.disabled = false;
+            console.log('[DEBUG] Neither player ready');
+          }
+        }
+      }
+      // Handle game start
+      else if (msg.type === "game_start") {
+        console.log('[DEBUG] >>> RECEIVED BACKEND "Both players ready, starting game" (game_start message) <<<');
+        console.log('[DEBUG] Received game_start message, starting game');
+        // Both players are ready, start the game
+        if (multiplayerGame) {
+          // Reset game state for both players
+          multiplayerGame.scoreLeft = 0;
+          multiplayerGame.scoreRight = 0;
+          multiplayerGame.scoreLeftElement.textContent = "0";
+          multiplayerGame.scoreRightElement.textContent = "0";
+          multiplayerGame.gameOver = false;
+          multiplayerGame.hasTriggeredGameEnd = false;
+          multiplayerGame.ballX = (multiplayerGame.baseWidth / 2) * multiplayerGame.scale;
+          multiplayerGame.ballY = (multiplayerGame.baseHeight / 2) * multiplayerGame.scale;
+          const speedMultiplier = multiplayerGame.getSpeedMultiplier();
+          multiplayerGame.ballSpeedX = multiplayerGame.baseBallSpeedX * multiplayerGame.scale * speedMultiplier;
+          multiplayerGame.ballSpeedY = multiplayerGame.baseBallSpeedY * multiplayerGame.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          multiplayerGame.paddleLeftY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
+          multiplayerGame.paddleRightY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
+          multiplayerGame.gameStarted = true;
+          multiplayerGame.restartButton.style.display = "none";
+          // Start the game loop if host
+          if (multiplayerGame.isHost) {
+            multiplayerGame.pollForGameStart();
+          }
+          multiplayerGame.draw();
+          console.log('[DEBUG] Called draw() on multiplayerGame, gameStarted:', multiplayerGame.gameStarted);
+        }
+      }
+    };
+
+    // In /multiplayerGame/:matchId route, after initializing multiplayerGame (both host and guest), always show the back button
+    if (multiplayerGame) {
+      const backButton = document.getElementById("backButton") as HTMLButtonElement;
+      if (backButton) backButton.style.display = "block";
+    }
+  }, 0);
+  return html;
 });
 
 // Starts the router
@@ -708,6 +1187,11 @@ function setupRouteListeners() {
         if (!currentUser) return;
 
         const selectedMode = gameModeSelect.value;
+        if (selectedMode === "multiplayer") {
+          router.navigate("/multiplayer");
+          return;
+        }
+        
         tournament.addPlayers([currentUser.username, "Player 2"]);
         isTournamentMode = false;
         if (selectedMode === "standard") {

@@ -3,66 +3,66 @@ import { StatsManager } from "./stats.js";
 // Manages the core game logic for Pong Transcendence
 export class PongGame {
   // Canvas and context for rendering
-  protected canvas: HTMLCanvasElement;
-  protected ctx: CanvasRenderingContext2D;
+  public canvas: HTMLCanvasElement;
+  public ctx: CanvasRenderingContext2D;
   // UI elements for game settings and scores
-  protected speedSlider: HTMLInputElement;
-  protected backgroundColorSelect: HTMLSelectElement | null;
-  protected scoreLeftElement: HTMLSpanElement;
-  protected scoreRightElement: HTMLSpanElement;
-  protected restartButton: HTMLButtonElement;
-  protected settingsButton: HTMLButtonElement;
-  protected settingsMenu: HTMLDivElement;
-  protected settingsContainer: HTMLDivElement;
+  public speedSlider: HTMLInputElement;
+  public backgroundColorSelect: HTMLSelectElement | null;
+  public scoreLeftElement: HTMLSpanElement;
+  public scoreRightElement: HTMLSpanElement;
+  public restartButton: HTMLButtonElement;
+  public settingsButton: HTMLButtonElement;
+  public settingsMenu: HTMLDivElement;
+  public settingsContainer: HTMLDivElement;
   // Manages game statistics
-  protected statsManager: StatsManager;
+  public statsManager: StatsManager;
   // User name for settings persistence
-  protected userName: string | null;
+  public userName: string | null;
   // Navigation callback
-  protected navigate: (path: string) => void;
+  public navigate: (path: string) => void;
 
   // Game state variables
-  protected paddleLeftY: number = 160;
-  protected paddleRightY: number = 160;
-  protected ballX: number = 400;
-  protected ballY: number = 200;
-  protected ballSpeedX: number = 6.0;
-  protected ballSpeedY: number = 4.1;
-  protected scoreLeft: number = 0;
-  protected scoreRight: number = 0;
-  protected gameOver: boolean = false;
-  protected gameStarted: boolean = false;
-  protected isPaused: boolean = false;
-  protected playerLeftName: string;
-  protected playerRightName: string;
-  protected backgroundColor: string = "#d8a8b5";
-  protected onGameEnd?: (winnerName: string) => void;
+  public paddleLeftY: number = 160;
+  public paddleRightY: number = 160;
+  public ballX: number = 400;
+  public ballY: number = 200;
+  public ballSpeedX: number = 6.0;
+  public ballSpeedY: number = 4.1;
+  public scoreLeft: number = 0;
+  public scoreRight: number = 0;
+  public gameOver: boolean = false;
+  public gameStarted: boolean = false;
+  public isPaused: boolean = false;
+  public playerLeftName: string;
+  public playerRightName: string;
+  public backgroundColor: string = "#d8a8b5";
+  public onGameEnd?: (winnerName: string) => void;
 
   // Tournament mode flag
-  protected isTournamentMode: boolean;
+  public isTournamentMode: boolean;
 
   // Flag to prevent multiple onGameEnd triggers
-  protected hasTriggeredGameEnd: boolean = false;
+  public hasTriggeredGameEnd: boolean = false;
 
   // Game constants
-  protected paddleSpeed: number = 5;
-  protected keys: Record<"w" | "s" | "ArrowUp" | "ArrowDown", boolean> = {
+  public paddleSpeed: number = 5;
+  public keys: Record<"w" | "s" | "ArrowUp" | "ArrowDown", boolean> = {
     w: false,
     s: false,
     ArrowUp: false,
     ArrowDown: false,
   };
   // Base ball speeds
-  protected baseBallSpeedX: number = 6.0;
-  protected baseBallSpeedY: number = 4.1;
+  public baseBallSpeedX: number = 6.0;
+  public baseBallSpeedY: number = 4.1;
 
   // Canvas dimensions and scaling
-  protected baseWidth: number = 800;
-  protected baseHeight: number = 400;
-  protected scale: number = 1;
+  public baseWidth: number = 800;
+  public baseHeight: number = 400;
+  public scale: number = 1;
 
   // Timing for delta-time calculation
-  protected lastTime: number = 0; // Stores timestamp of last frame
+  public lastTime: number = 0; // Stores timestamp of last frame
 
   // Initializes the game with player names and UI element IDs
   constructor(
@@ -125,7 +125,7 @@ export class PongGame {
   }
 
   // Computes the speed multiplier based on the speed slider
-  protected getSpeedMultiplier(): number {
+  public getSpeedMultiplier(): number {
     return parseInt(this.speedSlider.value) / 5; // Default slider value of 5 gives multiplier of 1
   }
 
@@ -234,7 +234,7 @@ export class PongGame {
   }
 
   // Renders the game and updates game state
-  protected draw(timestamp: number = performance.now()) {
+  public draw(timestamp: number = performance.now()) {
     // Calculate delta time (in seconds)
     const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
     this.lastTime = timestamp;
@@ -268,13 +268,20 @@ export class PongGame {
         this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
       }
 
-      // Update ball position (only for player1 in multiplayer mode)
+      // Update ball position
       this.ballX += this.ballSpeedX * deltaTimeFactor;
       this.ballY += this.ballSpeedY * deltaTimeFactor;
 
-      // Bounce off top and bottom walls
-      if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
-        this.ballSpeedY = -this.ballSpeedY;
+      // Bounce off top and bottom walls with proper collision handling
+      const ballRadius = 10 * this.scale;
+      if (this.ballY - ballRadius <= 0) {
+        // Top wall collision
+        this.ballY = ballRadius; // Place ball at top boundary
+        this.ballSpeedY = Math.abs(this.ballSpeedY); // Ensure downward movement
+      } else if (this.ballY + ballRadius >= this.canvas.height) {
+        // Bottom wall collision
+        this.ballY = this.canvas.height - ballRadius; // Place ball at bottom boundary
+        this.ballSpeedY = -Math.abs(this.ballSpeedY); // Ensure upward movement
       }
 
       // Handle left paddle collision
@@ -361,7 +368,7 @@ export class PongGame {
       }
     }
 
-    // Draw ball (even for Player 2, since it receives ball position updates)
+    // Draw ball
     this.ctx.beginPath();
     this.ctx.arc(this.ballX, this.ballY, 10 * this.scale, 0, Math.PI * 2);
     this.ctx.fillStyle = "white";
