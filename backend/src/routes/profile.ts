@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { Database } from 'sqlite3';
 import { User, Match, UserSettings } from '../types';
 import { compare, hash } from 'bcrypt';
+import { isUserOnline } from './ws';
 
 export async function profileRoutes(fastify: FastifyInstance, db: Database) {
   fastify.get<{ Params: { id: string } }>('/profile/:id', async (request: any, reply: any) => {
@@ -112,6 +113,12 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
         );
       });
 
+      // Add online status to friends
+      const friendsWithStatus = friends.map(friend => ({
+        ...friend,
+        online: isUserOnline(friend.id)
+      }));
+
       return {
         user: {
           id: fullUserData.id,
@@ -124,7 +131,7 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
         },
         matches,
         settings: settings || {},
-        friends,
+        friends: friendsWithStatus,
       };
     } catch (err) {
       fastify.log.error('Current user profile fetch error:', err);

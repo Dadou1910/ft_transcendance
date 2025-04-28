@@ -153,23 +153,31 @@ export async function matchmakingRoutes(fastify: FastifyInstance) {
       return { error: 'Unauthorized' };
     }
 
-    // Remove from matchmaking queue if present
-    const queueIndex = matchmakingQueue.findIndex(p => p.userId === user.id);
-    if (queueIndex !== -1) {
-      matchmakingQueue.splice(queueIndex, 1);
-      fastify.log.info(`[MATCHMAKING] User ${user.id} left the matchmaking queue.`);
-      return { status: 'left_queue' };
-    }
-
-    // Mark match as finished if user is in a match
-    for (const match of Object.values(matches)) {
-      if (match.players.some(p => p.userId === user.id)) {
-        match.status = 'finished';
-        fastify.log.info(`[MATCHMAKING] User ${user.id} left match ${match.id}, marked as finished.`);
-        return { status: 'left_match', matchId: match.id };
+    try {
+      // Remove from matchmaking queue if present
+      const queueIndex = matchmakingQueue.findIndex(p => p.userId === user.id);
+      if (queueIndex !== -1) {
+        matchmakingQueue.splice(queueIndex, 1);
+        fastify.log.info(`[MATCHMAKING] User ${user.id} left the matchmaking queue.`);
+        return { status: 'left_queue' };
       }
-    }
 
-    return { status: 'not_found' };
+      // Find and mark any active matches as finished
+      for (const match of Object.values(matches)) {
+        if (match.players.some(p => p.userId === user.id)) {
+          match.status = 'finished';
+          // Remove the match from active matches
+          delete matches[match.id];
+          fastify.log.info(`[MATCHMAKING] User ${user.id} left match ${match.id}, marked as finished and removed.`);
+          return { status: 'left_match', matchId: match.id };
+        }
+      }
+
+      return { status: 'not_found' };
+    } catch (error) {
+      fastify.log.error('Error leaving matchmaking:', error);
+      reply.code(500);
+      return { error: 'Internal server error' };
+    }
   });
 } 

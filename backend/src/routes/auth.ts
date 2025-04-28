@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { hash, compare } from 'bcrypt';
 import { Database } from 'sqlite3';
 import { User } from '../types';
+import { onlineUsers } from './ws';
 const uuidv4 = () => crypto.randomUUID();
 
 export async function authRoutes(fastify: FastifyInstance, db: Database) {
@@ -163,8 +164,8 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
 
     const token = authHeader.replace('Bearer ', '');
     try {
-      const session = await new Promise<{ token: string } | undefined>((resolve, reject) => {
-        db.get('SELECT token FROM sessions WHERE token = ?', [token], (err, row: { token: string } | undefined) => {
+      const session = await new Promise<{ userId: number } | undefined>((resolve, reject) => {
+        db.get('SELECT userId FROM sessions WHERE token = ?', [token], (err, row: { userId: number } | undefined) => {
           if (err) reject(err);
           resolve(row);
         });
@@ -174,6 +175,9 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
         reply.code(401);
         return { error: 'Invalid session' };
       }
+
+      // Remove user from onlineUsers set
+      onlineUsers.delete(session.userId);
 
       await new Promise<void>((resolve, reject) => {
         db.run('DELETE FROM sessions WHERE token = ?', [token], (err) => {

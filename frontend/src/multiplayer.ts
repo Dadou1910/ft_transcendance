@@ -295,6 +295,10 @@ export class MultiplayerPongGame {
     const backButton = document.getElementById('backButton');
     if (backButton) {
       backButton.addEventListener('click', () => {
+        // Send cleanup message to both players
+        if (this.ws) {
+          this.ws.send(JSON.stringify({ type: "cleanup" }));
+        }
         if (this.ws) {
           this.ws.close();
         }
@@ -305,7 +309,56 @@ export class MultiplayerPongGame {
   }
 
   public cleanup(): void {
-    // Remove event listeners, close WebSocket, etc.
+    // Call matchmaking leave endpoint
+    const sessionToken = localStorage.getItem("sessionToken");
+    if (sessionToken) {
+      fetch("http://localhost:4000/matchmaking/leave", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${sessionToken}` },
+      }).catch(error => console.error("Error leaving matchmaking:", error));
+    }
+
+    // Remove event listeners
+    document.removeEventListener("keydown", (e) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        if (!this.isHost && this.ws) {
+          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
+        }
+      }
+    });
+    document.removeEventListener("keyup", (e) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        if (!this.isHost && this.ws) {
+          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
+        }
+      }
+    });
+
+    // Stop the game loop if it's running
+    this.gameLoopRunning = false;
+    this.gameStarted = false;
+    this.gameOver = true;
+
+    // Reset game state
+    this.paddleLeftY = 160;
+    this.paddleRightY = 160;
+    this.ballX = 400;
+    this.ballY = 200;
+    this.ballSpeedX = 6.0;
+    this.ballSpeedY = 4.1;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.hasTriggeredGameEnd = false;
+
+    // Clear the canvas
+    if (this.ctx) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    // Close WebSocket if it's open
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close();
+    }
   }
 
   // Computes the speed multiplier based on the speed slider

@@ -19,7 +19,7 @@ interface MatchClients {
 }
 
 // Global set to track online user IDs
-const onlineUsers = new Set<number>();
+export const onlineUsers = new Set<number>();
 
 // Exported function to check if a user is online
 export function isUserOnline(userId: number): boolean {
@@ -232,12 +232,24 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
         }
       });
 
-      connection.socket.on('close', () => {
+      connection.socket.on('close', async () => {
         clearInterval(pingInterval);
         fastify.log.info(`WebSocket connection closed for ${user.name}`);
 
         // Mark user as offline
         onlineUsers.delete(user.id);
+
+        // Call matchmaking/leave to clean up the match
+        try {
+          const reply = await fastify.inject({
+            method: 'POST',
+            url: '/matchmaking/leave',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          fastify.log.info('Matchmaking leave response:', reply.json());
+        } catch (error) {
+          fastify.log.error('Error calling matchmaking/leave:', error);
+        }
 
         // Only remove this specific client's connection
         if (isHost) {
@@ -262,9 +274,22 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
           }));
         }
 
-        // Clean up empty matches
+        // Clean up the match if:
+        // 1. The match is empty (no host or guest)
+        // 2. The game has ended (gameOver is true)
+        // 3. One player has disconnected
         if (!matchClients[matchId]?.host && !matchClients[matchId]?.guest) {
           fastify.log.info(`Removing empty match ${matchId}`);
+          delete matchClients[matchId];
+        } else if (matchClients[matchId]?.gameState?.gameOver || !matchClients[matchId]?.host || !matchClients[matchId]?.guest) {
+          // If the game has ended or one player has disconnected, clean up the entire match
+          fastify.log.info(`Game ended or player disconnected, cleaning up match ${matchId}`);
+          if (matchClients[matchId]?.host?.socket.socket.readyState === 1) {
+            matchClients[matchId].host.socket.socket.close();
+          }
+          if (matchClients[matchId]?.guest?.socket.socket.readyState === 1) {
+            matchClients[matchId].guest.socket.socket.close();
+          }
           delete matchClients[matchId];
         }
       });
