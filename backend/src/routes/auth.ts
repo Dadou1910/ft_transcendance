@@ -1,80 +1,135 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { hash, compare } from 'bcrypt';
 import { Database } from 'sqlite3';
 import { User } from '../types';
 import { onlineUsers } from './ws';
+
 const uuidv4 = () => crypto.randomUUID();
 
 export async function authRoutes(fastify: FastifyInstance, db: Database) {
-  fastify.post<{ Body: Pick<User, 'name' | 'email' | 'password'> }>('/register', async (request, reply) => {
-    const { name, email, password } = request.body;
-
-    if (!name || !email || !password) {
-      reply.code(400);
-      return { error: 'Name, email, and password are required' };
-    }
-    if (!email.includes('@')) {
-      reply.code(400);
-      return { error: 'Invalid email format' };
-    }
-    if (password.length < 8) {
-      reply.code(400);
-      return { error: 'Password must be at least 8 characters long' };
-    }
-
+  fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.log.info('[Register Debug] Starting registration process');
+    fastify.log.info('[Register Debug] Processing registration request');
     try {
-      const hashedPassword = await hash(password, fastify.config.BCRYPT_SALT_ROUNDS);
-      fastify.log.info(`Hashed password for user ${email}: ${hashedPassword}`);
-      if (!hashedPassword.startsWith('$2b$') || hashedPassword.length !== 60) {
-        fastify.log.error('Invalid bcrypt hash generated:', hashedPassword);
-        reply.code(500);
-        return { error: 'Failed to hash password' };
+      let name: string | undefined;
+      let email: string | undefined;
+      let password: string | undefined;
+      let avatarBuffer: Buffer | null = null;
+      let avatarMime: string | null = null;
+
+      // Process each part of the multipart form data
+      for await (const part of request.parts()) {
+        if (part.type === 'file') {
+          // Handle file upload (avatar)
+          avatarBuffer = await part.toBuffer();
+          avatarMime = part.mimetype;
+        } else if (part.type === 'field' && typeof part.value === 'string') {
+          // Handle form fields with type guard
+          switch (part.fieldname) {
+            case 'name':
+              name = part.value;
+              break;
+            case 'email':
+              email = part.value;
+              break;
+            case 'password':
+              password = part.value;
+              break;
+          }
+        }
       }
 
-      const lastID = await new Promise<number>((resolve, reject) => {
+      fastify.log.info(`[Register Debug] Parsed fields - name: ${name}, email: ${email}, avatar: ${avatarBuffer ? 'present' : 'not present'}`);
+
+      if (!name || !email || !password) {
+        reply.code(400);
+        return { error: 'Missing required fields' };
+      }
+
+      fastify.log.info('[Register Debug] Checking for existing user');
+      // Check if user already exists
+      const existingUser = await new Promise<User | undefined>((resolve, reject) => {
+        db.get('SELECT * FROM users WHERE email = ? OR name = ?', [email, name], (err: Error | null, row: User | undefined) => {
+          if (err) {
+            fastify.log.error(`[Register Debug] Database error checking user: ${err.message}`);
+            reject(err);
+            return;
+          }
+          fastify.log.info(`[Register Debug] User exists check: ${!!row}`);
+          resolve(row);
+        });
+      });
+
+      if (existingUser) {
+        fastify.log.warn(`[Register Debug] User exists - email match: ${existingUser.email === email}, name match: ${existingUser.name === name}`);
+        reply.code(400).send({ error: 'User with this email or username already exists' });
+        return;
+      }
+
+      fastify.log.info('[Register Debug] Hashing password');
+      const hashedPassword = await hash(password, fastify.config.BCRYPT_SALT_ROUNDS);
+      const now = new Date().toISOString();
+
+      // Insert user with avatar if provided
+      fastify.log.info('[Register Debug] Starting user insertion');
+      const lastID = await new Promise<number>(async (resolve, reject) => {
+        fastify.log.info(`[Register Debug] Attempting database insertion with values - name: ${name}, email: ${email}, hasAvatar: ${!!avatarBuffer}`);
         db.run(
-          'INSERT INTO users (name, email, password, wins, losses, tournamentsWon) VALUES (?, ?, ?, 0, 0, 0)',
-          [name, email, hashedPassword],
-          function(err) {
+          'INSERT INTO users (name, email, password, wins, losses, tournamentsWon, avatar, avatar_mime) VALUES (?, ?, ?, 0, 0, 0, ?, ?)',
+          [name, email, hashedPassword, avatarBuffer, avatarMime],
+          function(err: Error | null) {
             if (err) {
-              fastify.log.error('Database insertion error:', err);
+              fastify.log.error(`[Register Debug] Database insertion error: ${err.message}`);
+              if (err instanceof Error) {
+                fastify.log.error(`[Register Debug] Error details - code: ${(err as any).code}, errno: ${(err as any).errno}`);
+                fastify.log.error(`[Register Debug] Stack trace: ${err.stack}`);
+              }
               reject(err);
               return;
             }
-            fastify.log.info(`Insert successful, lastID: ${this.lastID}`);
+            fastify.log.info(`[Register Debug] Insert successful, lastID: ${this.lastID}`);
             resolve(this.lastID);
           }
         );
       });
 
-      if (!lastID) {
-        fastify.log.error(`Failed to insert user into database (no lastID). Name: ${name}, Email: ${email}`);
-        reply.code(500);
-        return { error: 'Failed to register user' };
-      }
-
+      // Get the inserted user to verify
+      fastify.log.info('[Register Debug] Verifying inserted user');
       const insertedUser = await new Promise<User | undefined>((resolve, reject) => {
-        db.get('SELECT password FROM users WHERE id = ?', [lastID], (err, row: User | undefined) => {
-          if (err) reject(err);
+        db.get('SELECT password FROM users WHERE id = ?', [lastID], (err: Error | null, row: User | undefined) => {
+          if (err) {
+            fastify.log.error('[Register Debug] Error verifying inserted user:', {
+              error: err.message,
+              code: (err as any).code,
+              errno: (err as any).errno,
+              stack: err.stack
+            });
+            reject(err);
+            return;
+          }
+          fastify.log.info('[Register Debug] User verification result:', { exists: !!row });
           resolve(row);
         });
       });
-      if (!insertedUser) {
-        fastify.log.error(`Failed to fetch inserted user. ID: ${lastID}`);
-        reply.code(500);
-        return { error: 'Failed to fetch inserted user' };
-      }
-      fastify.log.info(`Stored password for user ${email}: ${insertedUser.password}`);
 
-      return { id: lastID };
-    } catch (err: any) {
-      fastify.log.error('Registration error:', err);
-      if (err.message.includes('UNIQUE constraint failed')) {
-        reply.code(400);
-        return { error: 'Name or email already in use' };
+      if (!insertedUser) {
+        fastify.log.error('[Register Debug] Failed to verify inserted user');
+        reply.code(500).send({ error: 'Failed to create user' });
+        return;
       }
-      reply.code(500);
-      return { error: 'Server error' };
+
+      fastify.log.info('[Register Debug] Registration completed successfully');
+      reply.code(201).send({ message: 'User created successfully' });
+    } catch (err) {
+      fastify.log.error('[Register Debug] Registration error:', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined,
+        type: err instanceof Error ? err.constructor.name : typeof err
+      });
+      reply.code(500).send({ 
+        error: 'Internal server error', 
+        details: err instanceof Error ? err.message : 'Unknown error'
+      });
     }
   });
 

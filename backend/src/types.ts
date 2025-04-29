@@ -6,6 +6,7 @@ export interface User {
     wins: number
     losses: number
     tournamentsWon: number
+    avatar?: Buffer
 }
 
 export interface UserSettings {

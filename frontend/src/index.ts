@@ -63,32 +63,45 @@ let backendTournamentId: number | null = null;
 const navigate = (path: string) => router.navigate(path);
 
 // Helper function to get current user from backend
-async function getCurrentUser(): Promise<{ id: number; username: string; email: string; avatarUrl?: string } | null> {
+async function getCurrentUser(): Promise<{ id: number; username: string; email: string } | null> {
   const sessionToken = localStorage.getItem("sessionToken");
-  console.log("Fetching current user with sessionToken:", sessionToken); // Added for debugging
+  console.log("[GetUser Debug] Checking sessionToken:", sessionToken ? "Present" : "Missing");
+
   if (!sessionToken) {
-    console.log("Missing sessionToken, clearing localStorage"); // Added for debugging
-    localStorage.removeItem("sessionToken"); // Clear invalid token
+    console.log("[GetUser Debug] No sessionToken found, clearing localStorage");
+    localStorage.removeItem("sessionToken");
     return null;
   }
+
   try {
+    console.log("[GetUser Debug] Fetching user profile with sessionToken");
     const response = await fetch(`http://localhost:4000/profile/me`, {
       headers: { "Authorization": `Bearer ${sessionToken}` }
     });
-    console.log("Profile fetch response status:", response.status); // Added for debugging
-    if (!response.ok) throw new Error("Failed to fetch user");
+    console.log("[GetUser Debug] Profile fetch response status:", response.status);
+
+    if (!response.ok) {
+      console.error("[GetUser Debug] Failed to fetch user profile, status:", response.status);
+      throw new Error("Failed to fetch user");
+    }
+
     const { user } = await response.json();
-    return { id: user.id, username: user.name, email: user.email, avatarUrl: user.avatarUrl };
+    console.log("[GetUser Debug] User profile retrieved successfully:", { id: user.id, username: user.name });
+    return { id: user.id, username: user.name, email: user.email };
   } catch (error) {
-    console.error("Error fetching current user:", error);
+    console.error("[GetUser Debug] Error fetching user profile:", error);
     return null;
   }
 }
 
 // Defines root route ("/")
 router.addRoute("/", async () => {
+  console.log("[Route Debug] Entering root route handler");
   const currentUser = await getCurrentUser();
+  console.log("[Route Debug] getCurrentUser result:", currentUser ? "User found" : "No user found");
+
   if (currentUser) {
+    console.log("[Route Debug] Rendering logged-in welcome page for user:", currentUser.username);
     const html = renderLoggedInWelcomePage(
       async () => {
         // Logout callback
@@ -107,9 +120,11 @@ router.addRoute("/", async () => {
       },
       () => router.navigate('/tournament'),
       () => router.navigate('/settings'),
-      currentUser.avatarUrl
     );
+    console.log("[Route Debug] Logged-in welcome page HTML generated");
+
     setTimeout(() => {
+      console.log("[Route Debug] Setting up logged-in welcome page handlers");
       setupLoggedInWelcomePage(
         async () => {
           // Logout callback
@@ -194,28 +209,95 @@ router.addRoute("/welcome", () => {
 
 // Defines registration route ("/register")
 router.addRoute("/register", () => {
-  console.log("Rendering /register route");
+  console.log("[Registration Debug] Rendering /register route");
   return renderRegistrationForm(async (username, email, password, avatar) => {
-    console.log("Register onSubmit called");
-    try {
-      const sessionToken = localStorage.getItem("sessionToken");
-      const response = await fetch("http://localhost:4000/register", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})
-        },
-        body: JSON.stringify({ name: username, email, password }),
+    console.log("[Registration Debug] Starting registration process");
+    console.log("[Registration Debug] Form data:", { 
+      username, 
+      email, 
+      hasPassword: !!password, 
+      hasAvatar: !!avatar 
+    });
+    if (avatar) {
+      console.log("[Registration Debug] Avatar details:", {
+        name: avatar.name,
+        type: avatar.type,
+        size: avatar.size + " bytes",
+        lastModified: new Date(avatar.lastModified).toISOString()
       });
-      if (!response.ok) {
-        const data = await response.json();
-        alert((data.error as string) || "Registration failed");
+    }
+
+    try {
+      console.log("[Registration Debug] Creating FormData");
+      const formData = new FormData();
+      formData.append('name', username);
+      formData.append('email', email);
+      formData.append('password', password);
+      if (avatar) {
+        formData.append('avatar', avatar);
+      }
+
+      console.log("[Registration Debug] Sending registration request to server");
+      const registerResponse = await fetch("http://localhost:4000/register", {
+        method: "POST",
+        body: formData
+      });
+
+      console.log("[Registration Debug] Registration response:", {
+        status: registerResponse.status,
+        ok: registerResponse.ok,
+        statusText: registerResponse.statusText
+      });
+
+      const registerData = await registerResponse.json();
+      console.log("[Registration Debug] Registration response data:", registerData);
+
+      if (!registerResponse.ok) {
+        console.error("[Registration Debug] Registration failed:", registerData.error);
+        alert(registerData.error || "Registration failed");
         return;
       }
-      console.log("Navigating to /");
+
+      // After registration, login to get the session token
+      console.log("[Registration Debug] Registration successful, attempting login");
+      const loginResponse = await fetch("http://localhost:4000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      console.log("[Registration Debug] Login response:", {
+        status: loginResponse.status,
+        ok: loginResponse.ok,
+        statusText: loginResponse.statusText
+      });
+
+      const loginData = await loginResponse.json();
+      console.log("[Registration Debug] Login response data:", {
+        hasSessionToken: !!loginData.sessionToken,
+        error: loginData.error
+      });
+
+      if (!loginResponse.ok) {
+        console.error("[Registration Debug] Login failed:", loginData.error);
+        alert(loginData.error || "Login failed after registration");
+        return;
+      }
+
+      if (!loginData.sessionToken || typeof loginData.sessionToken !== "string") {
+        console.error("[Registration Debug] Invalid session token received");
+        alert("Login failed: Invalid session token");
+        return;
+      }
+
+      // Store the session token
+      localStorage.setItem("sessionToken", loginData.sessionToken);
+      console.log("[Registration Debug] Session token stored in localStorage");
+
+      console.log("[Registration Debug] Registration process complete, navigating to home");
       router.navigate("/");
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("[Registration Debug] Unexpected error:", error);
       alert("Server error during registration");
     }
   });
@@ -223,41 +305,54 @@ router.addRoute("/register", () => {
 
 // Defines login route ("/login")
 router.addRoute("/login", () => {
-  console.log("Rendering /login route");
+  console.log("[Login Debug] Rendering /login route");
   return renderLoginForm(
     async (email, password) => {
-      console.log("Login onSubmit called with:", { email });
+      console.log("[Login Debug] Login form submitted with email:", email);
       try {
+        console.log("[Login Debug] Sending login request to backend");
         const response = await fetch("http://localhost:4000/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
+        console.log("[Login Debug] Login response status:", response.status);
+        
         if (!response.ok) {
           const data = await response.json();
+          console.error("[Login Debug] Login failed:", data.error);
           alert((data.error as string) || "Invalid email or password");
           return;
         }
+
         const user = await response.json();
-        console.log("Credentials valid, setting session token");
+        console.log("[Login Debug] Login successful, user data received:", { 
+          ...user, 
+          sessionToken: user.sessionToken ? 'Present' : 'Missing' 
+        });
+
         // Validate sessionToken before storing
         if (!user.sessionToken || typeof user.sessionToken !== "string") {
-          console.error("Invalid session token received:", user.sessionToken);
+          console.error("[Login Debug] Invalid session token:", user.sessionToken);
           localStorage.removeItem("sessionToken"); // Clear invalid token
           alert("Login failed: Invalid session token");
           return;
         }
+
+        console.log("[Login Debug] Storing session token in localStorage");
         localStorage.setItem("sessionToken", user.sessionToken);
-        console.log("Session token set for user:", user.email);
-        console.log("Attempting navigation to /");
+        console.log("[Login Debug] Session token stored for user:", user.email);
+        
+        console.log("[Login Debug] Attempting navigation to /");
         router.navigate("/");
+        console.log("[Login Debug] Navigation command executed");
       } catch (error) {
-        console.error("Login error:", error);
+        console.error("[Login Debug] Login error:", error);
         alert("Server error during login");
       }
     },
     () => {
-      console.log("onRegister callback triggered from login");
+      console.log("[Login Debug] Register link clicked, navigating to /register");
       router.navigate("/register");
     }
   );
@@ -742,7 +837,7 @@ router.addRoute("/profile", async () => {
       playerStats = {
       wins: user.wins || 0,
       losses: user.losses || 0,
-      tournamentsWon: user.tournamentsWon || 0
+      tournamentsWon: user.tournamentsWon || 0,
     };
       gameStats = {};
     matches.forEach((match: any) => {
@@ -773,7 +868,6 @@ router.addRoute("/profile", async () => {
       latestHtml = renderProfilePage(
       currentUser.username,
       currentUser.email,
-      currentUser.avatarUrl,
       playerStats,
       matchHistory,
         gameStats,
@@ -1190,26 +1284,81 @@ function setupRouteListeners() {
   } else if (window.location.pathname === "/register") {
     console.log("Setting up registration form");
     setupRegistrationForm(async (username, email, password, avatar) => {
-      console.log("Registration form submitted");
-      try {
-        const sessionToken = localStorage.getItem("sessionToken");
-        const response = await fetch("http://localhost:4000/register", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})
-          },
-          body: JSON.stringify({ name: username, email, password }),
+      console.log("[Registration Debug] Starting registration process");
+      console.log("[Registration Debug] Form data:", { username, email, hasPassword: !!password, hasAvatar: !!avatar });
+      if (avatar) {
+        console.log("[Registration Debug] Avatar details:", {
+          name: avatar.name,
+          type: avatar.type,
+          size: avatar.size + " bytes",
+          lastModified: new Date(avatar.lastModified).toISOString()
         });
-        if (!response.ok) {
-          const data = await response.json();
-          alert((data.error as string) || "Registration failed");
+      }
+
+      try {
+        // First register the user
+        console.log("[Registration Debug] Sending registration request to server");
+        const formData = new FormData();
+        formData.append('name', username);
+        formData.append('email', email);
+        formData.append('password', password);
+        if (avatar) {
+          formData.append('avatar', avatar);
+        }
+
+        const registerResponse = await fetch("http://localhost:4000/register", {
+          method: "POST",
+          body: formData
+        });
+
+        const registerData = await registerResponse.json();
+        console.log("[Registration Debug] Registration response:", {
+          status: registerResponse.status,
+          ok: registerResponse.ok,
+          data: registerData
+        });
+
+        if (!registerResponse.ok) {
+          console.error("[Registration Debug] Registration failed:", registerData.error);
+          alert(registerData.error || "Registration failed");
           return;
         }
-        console.log("Navigating to / from setup");
+
+        // After registration, login to get the session token
+        console.log("[Registration Debug] Registration successful, attempting login");
+        const loginResponse = await fetch("http://localhost:4000/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const loginData = await loginResponse.json();
+        console.log("[Registration Debug] Login response:", {
+          status: loginResponse.status,
+          ok: loginResponse.ok,
+          hasSessionToken: !!loginData.sessionToken
+        });
+
+        if (!loginResponse.ok) {
+          console.error("[Registration Debug] Login failed:", loginData.error);
+          alert(loginData.error || "Login failed after registration");
+          return;
+        }
+
+        if (!loginData.sessionToken || typeof loginData.sessionToken !== "string") {
+          console.error("[Registration Debug] Invalid session token received");
+          alert("Login failed: Invalid session token");
+          return;
+        }
+
+        // Store the session token
+        localStorage.setItem("sessionToken", loginData.sessionToken);
+        console.log("[Registration Debug] Session token stored in localStorage");
+
+        console.log("[Registration Debug] Registration process complete, navigating to home");
         router.navigate("/");
       } catch (error) {
-        console.error("Registration error:", error);
+        console.error("[Registration Debug] Unexpected error:", error);
         alert("Server error during registration");
       }
     });

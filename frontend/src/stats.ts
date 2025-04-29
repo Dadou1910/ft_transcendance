@@ -19,7 +19,6 @@ export interface User {
   username: string;
   email: string;
   password: string;
-  avatarUrl?: string;
 }
 
 // Defines structure for a player
@@ -100,7 +99,6 @@ export class StatsManager {
             username: user.name,
             email: user.email,
             password: "",
-            avatarUrl: user.avatarUrl,
           });
           this.matchHistory = matches.map((m: any) => ({
             winner: m.userScore > m.opponentScore ? m.userName : m.opponentName,
@@ -129,18 +127,10 @@ export class StatsManager {
   }
 
   // --- User Management ---
-  addUser(username: string, email: string, password: string, avatar?: File): void {
-    let avatarUrl: string | undefined;
-    if (avatar) {
-      try {
-        avatarUrl = URL.createObjectURL(avatar);
-      } catch (error) {
-        console.error("Failed to create avatar URL:", error);
-      }
-    }
-    const user = { username, email: email.toLowerCase(), password, avatarUrl };
+  addUser(username: string, email: string, password: string): void {
+    const user = { username, email: email.toLowerCase(), password };
     this.users.push(user);
-    console.log("Added user:", { username, email, avatarUrl });
+    console.log("Added user:", { username, email });
   }
 
   hasUser(username: string): boolean {

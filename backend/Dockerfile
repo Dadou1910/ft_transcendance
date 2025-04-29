@@ -10,9 +10,6 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Install type definitions
-RUN npm install --save-dev @types/node
-
 # Copy source code
 COPY . .
 

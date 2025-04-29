@@ -183,13 +183,14 @@ body {
 }
 
 .settings-button {
-  padding: 0.5rem 1rem;
-  background-color: #666;
+  position: relative;  /* Ensure relative positioning for absolute child positioning */
+  background-color: rgba(0, 0, 0, 0.6);
   color: white;
   border: none;
-  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.3s ease;
 }
 
 .settings-button:hover {
@@ -199,14 +200,13 @@ body {
 .settings-menu {
   display: none;
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  right: calc(100% + 10px);  /* Position to the left of the button with 10px gap */
+  top: 0;  /* Align with top of settings button */
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 1rem;
+  border-radius: 0.5rem;
   z-index: 1000;
+  min-width: 200px;
 }
 
 .settings-menu.visible {
@@ -645,6 +645,45 @@ body {
   outline: none;
   font-size: clamp(12px, 1.5vw, 16px);
 }
+
+/* File input specific styling */
+.form-input[type="file"] {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.form-input[type="file"]::-webkit-file-upload-button {
+  background-color: #f4c2c2;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.25rem;
+  margin-right: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.form-input[type="file"]::-webkit-file-upload-button:hover {
+  background-color: #ffb6c1;
+}
+
+.form-input[type="file"]::-moz-file-upload-button {
+  background-color: #f4c2c2;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.25rem;
+  margin-right: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.form-input[type="file"]::-moz-file-upload-button:hover {
+  background-color: #ffb6c1;
+}
+
 .form-input:focus {
   border-color: #ffb6c1;
   box-shadow: 0 0 5px rgba(255, 182, 193, 0.7);

@@ -40,6 +40,7 @@ export class NeonCityPong extends PongGame {
   // Offscreen canvas for static background
   private backgroundCanvas: HTMLCanvasElement | null = null;
   private backgroundCtx: CanvasRenderingContext2D | null = null;
+  private isBackgroundInitializing: boolean = false;
   // Reference to background color select element
   public backgroundColorSelect: HTMLSelectElement | null = null;
   // Static background image
@@ -125,7 +126,9 @@ export class NeonCityPong extends PongGame {
     this.backgroundImage.src = "assets/buildingBackground.png";
     this.backgroundImage.onload = () => {
       console.log("Background image loaded successfully");
-      this.initBackgroundCanvas();
+      if (this.backgroundCtx) {
+        this.drawNeonBackground(this.backgroundCtx);
+      }
     };
     this.backgroundImage.onerror = () => {
       console.error("Failed to load background image");
@@ -147,9 +150,8 @@ export class NeonCityPong extends PongGame {
     this.checkPowerUpCollision = this.checkPowerUpCollision.bind(this);
     this.checkBuildingCollision = this.checkBuildingCollision.bind(this);
 
-    // Resizes canvas, initializes background, and starts animation
+    // Resizes canvas and starts animation
     this.resizeCanvas();
-    this.initBackgroundCanvas();
     window.addEventListener("resize", () => {
       this.resizeCanvas();
       this.initBackgroundCanvas();
@@ -159,6 +161,7 @@ export class NeonCityPong extends PongGame {
   // Initializes the offscreen background canvas
   private initBackgroundCanvas(): void {
     if (!this.canvas) return;
+    this.isBackgroundInitializing = true;
     this.backgroundCanvas = document.createElement("canvas");
     this.backgroundCanvas.width = this.canvas.width;
     this.backgroundCanvas.height = this.canvas.height;
@@ -167,7 +170,10 @@ export class NeonCityPong extends PongGame {
       console.error("Failed to get 2D context for background canvas");
       return;
     }
+    if (this.backgroundImage && this.backgroundImage.complete) {
     this.drawNeonBackground(this.backgroundCtx);
+    }
+    this.isBackgroundInitializing = false;
   }
 
   // Resizes the canvas based on browser window size and maintains aspect ratio
@@ -262,26 +268,27 @@ export class NeonCityPong extends PongGame {
 
   // Draws the neon-themed background
   private drawNeonBackground(ctx: CanvasRenderingContext2D): void {
-    console.log("Drawing neon background");
     const canvas = ctx.canvas;
     ctx.fillStyle = this.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw the static background image, stretched to fit canvas width and aligned at the bottom
-    if (this.backgroundImage && this.backgroundImage.complete && this.backgroundImage.naturalWidth !== 0) {
+    if (!this.backgroundImage || !this.backgroundImage.complete) {
+      // Only warn once when image is completely missing
+      if (!this.backgroundImage) {
+        console.warn("Background image not loaded, skipping draw");
+      }
+    } else {
       const imgWidth = canvas.width; // Stretch to full canvas width
       const aspectRatio = this.backgroundImage.naturalWidth / this.backgroundImage.naturalHeight;
       const imgHeight = imgWidth / aspectRatio; // Maintain original aspect ratio
       const imgY = canvas.height - imgHeight + 200 * this.scale; // Shift downward by 200 scaled pixels
       ctx.drawImage(this.backgroundImage, 0, imgY, imgWidth, imgHeight);
-    } else {
-      console.warn("Background image not loaded, skipping draw");
     }
   }
 
   // Draws moving buildings in the background
   private drawBuildings(ctx: CanvasRenderingContext2D): void {
-    console.log("Drawing buildings");
     if (!this.buildings) {
       console.warn("Buildings array is undefined, reinitializing...");
       const buildingImage = new Image();
@@ -298,10 +305,13 @@ export class NeonCityPong extends PongGame {
       if (building.y < -building.height) building.y = this.canvas.height;
       if (building.y > this.canvas.height) building.y = -building.height;
 
-      if (building.image && building.image.complete && building.image.naturalWidth !== 0) {
-        ctx.drawImage(building.image, building.x, building.y, building.width, building.height);
+      if (!building.image || !building.image.complete || building.image.naturalWidth === 0) {
+        // Only warn once when image is actually not loaded
+        if (!building.image) {
+          console.warn("Building image not loaded for building at x:", building.x);
+        }
       } else {
-        console.warn("Building image not loaded for building at x:", building.x);
+        ctx.drawImage(building.image, building.x, building.y, building.width, building.height);
       }
       ctx.restore();
     });
@@ -524,8 +534,7 @@ private checkPowerUpCollision(): void {
     // Draw the pre-rendered background
     if (this.backgroundCanvas) {
       this.ctx.drawImage(this.backgroundCanvas, 0, 0);
-    } else {
-      console.warn("Background canvas not initialized, reinitializing...");
+    } else if (!this.isBackgroundInitializing) {
       this.initBackgroundCanvas();
       if (this.backgroundCanvas) {
         this.ctx.drawImage(this.backgroundCanvas, 0, 0);

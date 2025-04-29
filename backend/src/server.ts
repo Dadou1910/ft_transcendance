@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import fastifyEnv from './config';
 import { initializeDatabase } from './database';
 import { authRoutes } from './routes/auth';
@@ -11,6 +12,7 @@ import { statsRoutes } from './routes/stats';
 import { matchmakingRoutes } from './routes/matchmaking';
 import { sessionMiddleware } from './routes/middleware';
 import { wsRoutes } from './routes/ws';
+import { avatarRoutes } from './routes/avatar';
 
 async function buildServer() {
   const fastify = Fastify({ logger: true });
@@ -18,6 +20,11 @@ async function buildServer() {
   await fastify.register(fastifyEnv);
 
   await fastify.register(cors, { origin: '*' });
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 2 * 1024 * 1024 // 2MB
+    }
+  });
 
   const db = await initializeDatabase(fastify);
 
@@ -32,6 +39,7 @@ async function buildServer() {
   await statsRoutes(fastify, db);
   await matchmakingRoutes(fastify);
   await wsRoutes(fastify, db);
+  await avatarRoutes(fastify, db);
 
   fastify.get('/', async (request, reply) => {
     return { status: 'Server is running' };

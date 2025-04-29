@@ -61,7 +61,6 @@ export function renderLoggedInWelcomePage(
   onPlayMatch: (mode: string) => void,
   onPlayTournament: () => void,
   onSettings: () => void,
-  avatarUrl?: string
 ): string {
   return `
     <div class="logged-in-container">
@@ -70,9 +69,10 @@ export function renderLoggedInWelcomePage(
       </button>
       <div id="sidebar" class="sidebar">
         <img
-          src="${avatarUrl || ''}"
+          src="http://localhost:4000/avatar/${encodeURIComponent(username)}"
           class="avatar"
-          ${avatarUrl ? '' : 'style="background-color: black;"'}
+          alt="Profile"
+          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
         />
         <h2 class="sidebar-username">${username}</h2>
         <p class="sidebar-email">${email}</p>
@@ -504,8 +504,9 @@ export function renderRegistrationForm(onSubmit: (username: string, email: strin
             <p id="passwordError" class="error-message">Password must be at least 8 characters, including a number and a special character.</p>
           </div>
           <div>
-            <label for="avatar" class="block text-white text-lg">Avatar (Optional):</label>
-            <input type="file" id="avatar" accept="image/*" class="form-input">
+            <label for="avatar" class="block text-white text-lg">Profile Picture:</label>
+            <input type="file" id="avatar" class="form-input" accept="image/*">
+            <p id="avatarError" class="error-message">File must be an image under 2MB.</p>
           </div>
           <button type="submit" class="form-button">Register</button>
         </form>
@@ -528,6 +529,7 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
   const usernameError = document.getElementById("usernameError") as HTMLParagraphElement;
   const emailError = document.getElementById("emailError") as HTMLParagraphElement;
   const passwordError = document.getElementById("passwordError") as HTMLParagraphElement;
+  const avatarError = document.getElementById("avatarError") as HTMLParagraphElement;
 
   // Handle form submission with validation
   form.addEventListener("submit", (e) => {
@@ -565,8 +567,22 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
       passwordError.classList.remove("visible");
     }
 
-    // Optional avatar
-    const avatar = avatarInput.files?.[0];
+    // Validate avatar if one was selected
+    let avatar: File | undefined;
+    if (avatarInput.files && avatarInput.files.length > 0) {
+      avatar = avatarInput.files[0];
+      if (!avatar.type.startsWith('image/')) {
+        avatarError.textContent = 'File must be an image.';
+        avatarError.classList.add("visible");
+        isValid = false;
+      } else if (avatar.size > 2 * 1024 * 1024) { // 2MB
+        avatarError.textContent = 'Image must be under 2MB.';
+        avatarError.classList.add("visible");
+        isValid = false;
+      } else {
+        avatarError.classList.remove("visible");
+      }
+    }
 
     // Submit if valid
     if (isValid) {
@@ -875,7 +891,6 @@ export function setupSettingsPage(
 export function renderProfilePage(
   username: string,
   email: string,
-  avatarUrl: string | undefined,
   playerStats: PlayerStats,
   matchHistory: MatchRecord[],
   gameStats: Record<string, GameStats>,
@@ -899,7 +914,7 @@ export function renderProfilePage(
       <div class="profile-header" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
         <div class="profile-user-info">
           <img
-            src="${avatarUrl || '/assets/default-avatar.png'}"
+            src=""
             class="profile-avatar"
           />
           <div class="profile-text-info">

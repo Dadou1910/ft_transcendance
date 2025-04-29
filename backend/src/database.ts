@@ -21,7 +21,9 @@ export async function initializeDatabase(fastify: FastifyInstance) {
           password TEXT NOT NULL,
           wins INTEGER NOT NULL DEFAULT 0,
           losses INTEGER NOT NULL DEFAULT 0,
-          tournamentsWon INTEGER NOT NULL DEFAULT 0
+          tournamentsWon INTEGER NOT NULL DEFAULT 0,
+          avatar BLOB,
+          avatar_mime TEXT
         );
       `, (err) => {
         if (err) reject(err);

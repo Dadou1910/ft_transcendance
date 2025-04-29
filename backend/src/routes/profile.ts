@@ -51,7 +51,6 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
           id: user.id,
           name: user.name,
           email: user.email,
-          avatarUrl: undefined,
         },
         matches,
         settings: settings || {},
@@ -124,7 +123,6 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
           id: fullUserData.id,
           name: fullUserData.name,
           email: fullUserData.email,
-          avatarUrl: undefined,
           wins: fullUserData.wins,
           losses: fullUserData.losses,
           tournamentsWon: fullUserData.tournamentsWon

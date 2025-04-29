@@ -368,7 +368,7 @@ export class MultiplayerPongGame {
 
   private async recordMatch(winnerName: string, loserName: string, winnerScore: number, loserScore: number) {
     try {
-      this.statsManager.recordMatch(winnerName, loserName, "Pong", {
+      this.statsManager.recordMatch(winnerName, loserName, "Online Pong", {
         player1Score: winnerScore,
         player2Score: loserScore,
         sessionToken: localStorage.getItem("sessionToken")
