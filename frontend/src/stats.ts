@@ -70,6 +70,7 @@ export class StatsManager {
   private userSettings: Record<string, UserSettings> = {};
   private gameStats: Record<string, Record<string, GameStats>> = {};
   private currentUser: User | null = null;
+  private avatarCache: { [username: string]: string } = {}; // Memory cache for avatars
 
   private log(message: string, data?: any): void {
     console.log(`[StatsManager] ${message}`, data ? data : '');
@@ -360,11 +361,11 @@ export class StatsManager {
   }
 
   getCurrentUser(): User | null {
-    const sessionToken = localStorage.getItem("sessionToken");
-    if (!sessionToken) {
-      return null;
-    }
     return this.currentUser;
+  }
+
+  setCurrentUser(user: User) {
+    this.currentUser = user;
   }
 
   // --- User Settings Management ---
@@ -412,5 +413,50 @@ export class StatsManager {
 
   getUserSettings(username: string): UserSettings | null {
     return this.userSettings[username] || null;
+  }
+
+  // Avatar caching methods
+  async getAvatar(username: string): Promise<string> {
+    // Check memory cache first
+    if (this.avatarCache[username]) {
+      return this.avatarCache[username];
+    }
+
+    // Check localStorage
+    const cachedAvatar = localStorage.getItem(`avatar_${username}`);
+    if (cachedAvatar) {
+      this.avatarCache[username] = cachedAvatar; // Update memory cache
+      return cachedAvatar;
+    }
+
+    // Fetch from server if not in cache
+    const avatar = await this.fetchAvatar(username);
+    this.cacheAvatar(username, avatar);
+    return avatar;
+  }
+
+  private async fetchAvatar(username: string): Promise<string> {
+    try {
+      const response = await fetch(`http://localhost:4000/avatar/${encodeURIComponent(username)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch avatar');
+      }
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error('Error fetching avatar:', error);
+      // Return default avatar
+      return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+';
+    }
+  }
+
+  cacheAvatar(username: string, avatar: string) {
+    this.avatarCache[username] = avatar;
+    localStorage.setItem(`avatar_${username}`, avatar);
+  }
+
+  clearAvatarCache(username: string) {
+    delete this.avatarCache[username];
+    localStorage.removeItem(`avatar_${username}`);
   }
 }

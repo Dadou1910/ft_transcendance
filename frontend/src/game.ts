@@ -168,6 +168,10 @@ export class PongGame {
       if (this.userName) {
         this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(this.speedSlider.value) });
       }
+      // Apply speed change immediately
+      const speedMultiplier = this.getSpeedMultiplier();
+      this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * Math.sign(this.ballSpeedX);
+      this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * Math.sign(this.ballSpeedY);
     });
 
     // Background color selector

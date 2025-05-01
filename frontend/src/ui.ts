@@ -1,4 +1,4 @@
-import { PlayerStats, MatchRecord, GameStats } from './stats';
+import { PlayerStats, MatchRecord, GameStats, StatsManager } from './stats';
 
 // Manages UI rendering and setup for the Pong Transcendence game
 // Includes welcome pages, game view, forms, and tournament end screen
@@ -772,8 +772,16 @@ export function renderSettingsPage(
   return `
     <div class="settings-page">
       <div class="settings-header">
-        <h1>Account Settings</h1>
-        <p>Manage your profile and preferences</p>
+        <img
+          src="http://localhost:4000/avatar/${encodeURIComponent(username)}"
+          class="profile-avatar"
+          alt="Profile"
+          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
+        />
+        <div class="avatar-upload">
+          <input type="file" id="avatar" accept="image/*" />
+          <p class="input-hint">Maximum file size: 2MB. Supported formats: JPEG, PNG, GIF.</p>
+        </div>
       </div>
       
       <div class="settings-content">
@@ -781,11 +789,11 @@ export function renderSettingsPage(
           <h2>Profile Information</h2>
           <div class="settings-option">
             <label for="username">Username</label>
-            <input type="text" id="username" class="text-input" value="${username || ''}" />
+            <input type="text" id="username" class="text-input" value="${escapeHtml(username || '')}" />
           </div>
           <div class="settings-option">
             <label for="email">Email Address</label>
-            <input type="email" id="email" class="text-input" value="${email || ''}" />
+            <input type="email" id="email" class="text-input" value="${escapeHtml(email || '')}" />
           </div>
         </div>
 
@@ -818,7 +826,8 @@ export function renderSettingsPage(
 
 export function setupSettingsPage(
   onSave: (updates: { username?: string; email?: string; currentPassword?: string; newPassword?: string }) => void,
-  onBack: () => void
+  onBack: () => void,
+  statsManager: StatsManager
 ): void {
   const usernameInput = document.getElementById("username") as HTMLInputElement;
   const emailInput = document.getElementById("email") as HTMLInputElement;
@@ -829,15 +838,24 @@ export function setupSettingsPage(
   const backButton = document.getElementById("backButton");
   const errorDiv = document.getElementById("settingsError");
 
+  const currentUser = statsManager.getCurrentUser();
+  if (!currentUser) return;
+
   if (saveButton) {
-    saveButton.addEventListener("click", () => {
+    saveButton.addEventListener("click", async () => {
       // Clear previous error
       if (errorDiv) errorDiv.textContent = "";
 
       const updates: { username?: string; email?: string; currentPassword?: string; newPassword?: string } = {};
       let hasChanges = false;
 
-      // Collect changes
+      // Check for avatar changes
+      const avatarInput = document.getElementById('avatar') as HTMLInputElement;
+      if (avatarInput && avatarInput.files && avatarInput.files.length > 0) {
+        hasChanges = true;
+      }
+
+      // Collect profile changes
       if (usernameInput && usernameInput.value.trim() !== usernameInput.defaultValue) {
         updates.username = usernameInput.value.trim();
         hasChanges = true;
@@ -848,7 +866,7 @@ export function setupSettingsPage(
         hasChanges = true;
       }
 
-      // Handle password change
+      // Only validate password if both current and new password fields are intentionally filled
       if (currentPasswordInput?.value && newPasswordInput?.value) {
         if (newPasswordInput.value.length < 8) {
           if (errorDiv) errorDiv.textContent = "New password must be at least 8 characters long";
@@ -863,9 +881,6 @@ export function setupSettingsPage(
         updates.currentPassword = currentPasswordInput.value;
         updates.newPassword = newPasswordInput.value;
         hasChanges = true;
-      } else if (currentPasswordInput?.value || newPasswordInput?.value || confirmPasswordInput?.value) {
-        if (errorDiv) errorDiv.textContent = "Please fill in all password fields to change password";
-        return;
       }
 
       if (!hasChanges) {
@@ -911,14 +926,19 @@ export function renderProfilePage(
 
   return `
     <div class="profile-page">
+      <div class="profile-actions">
+        <button id="backButton" class="secondary-button">Back</button>
+      </div>
       <div class="profile-header" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
         <div class="profile-user-info">
           <img
-            src=""
+            src="http://localhost:4000/avatar/${encodeURIComponent(username)}"
             class="profile-avatar"
+            alt="Profile"
+            onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
           />
           <div class="profile-text-info">
-            <h1 class="profile-username">${escapeHtml(username)}</h1>
+            <h2 class="profile-username">${escapeHtml(username)}</h2>
             <p class="profile-email">${escapeHtml(email)}</p>
           </div>
         </div>

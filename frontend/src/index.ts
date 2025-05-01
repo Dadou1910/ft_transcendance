@@ -601,9 +601,13 @@ async function handleGameRoute(): Promise<string> {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.username || null,
-      onGameEnd,
       navigate,
-      isTournamentMode
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
   }, 0);
   return html;
@@ -633,8 +637,13 @@ router.addRoute("/game", () => {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.username || null,
-      undefined,
-      navigate
+      navigate,
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
   }, 0);
   return html;
@@ -711,7 +720,12 @@ router.addRoute("/neonCityGame", () => {
       statsManager,
       statsManager.getCurrentUser()?.username || null,
       navigate,
-      undefined
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
   }, 0);
   return html;
@@ -741,8 +755,13 @@ router.addRoute("/aiGame", () => {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.username || null,
-      undefined,
-      navigate
+      navigate,
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
   }, 0);
   return html;
@@ -773,7 +792,12 @@ router.addRoute("/spaceBattleGame", () => {
       statsManager,
       statsManager.getCurrentUser()?.username || null,
       navigate,
-      undefined
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
   }, 0);
   return html;
@@ -828,63 +852,67 @@ router.addRoute("/profile", async () => {
         router.navigate("/login");
         return;
       }
-    const response = await fetch(`http://localhost:4000/profile/me`, {
-      headers: { "Authorization": `Bearer ${sessionToken}` }
-    });
+      const response = await fetch(`http://localhost:4000/profile/me`, {
+        headers: { "Authorization": `Bearer ${sessionToken}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch profile data");
       const { user, matches, friends } = await response.json();
       latestFriends = friends;
       playerStats = {
-      wins: user.wins || 0,
-      losses: user.losses || 0,
-      tournamentsWon: user.tournamentsWon || 0,
-    };
+        wins: user.wins || 0,
+        losses: user.losses || 0,
+        tournamentsWon: user.tournamentsWon || 0,
+      };
       gameStats = {};
-    matches.forEach((match: any) => {
-      const { gameType, userName, opponentName, userScore, opponentScore } = match;
-      if (!gameStats[gameType]) {
-        gameStats[gameType] = {
-          username: currentUser.username,
-          gameType,
-          gamesPlayed: 0,
-          wins: 0,
-          losses: 0
-        };
-      }
-      gameStats[gameType].gamesPlayed++;
-      if (userName === currentUser.username && userScore > opponentScore) {
-        gameStats[gameType].wins++;
-      } else if (opponentName === currentUser.username && opponentScore > userScore) {
-        gameStats[gameType].wins++;
-      } else {
-        gameStats[gameType].losses++;
-      }
-    });
+      matches.forEach((match: any) => {
+        const { gameType, userName, opponentName, userScore, opponentScore } = match;
+        if (!gameStats[gameType]) {
+          gameStats[gameType] = {
+            username: currentUser.username,
+            gameType,
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0
+          };
+        }
+        gameStats[gameType].gamesPlayed++;
+        if (userName === currentUser.username && userScore > opponentScore) {
+          gameStats[gameType].wins++;
+        } else if (opponentName === currentUser.username && opponentScore > userScore) {
+          gameStats[gameType].wins++;
+        } else {
+          gameStats[gameType].losses++;
+        }
+      });
       matchHistory = matches.map((match: any) => ({
-      winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
-      loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
-      timestamp: match.date
-    }));
+        winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
+        loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
+        timestamp: match.date
+      }));
       latestHtml = renderProfilePage(
-      currentUser.username,
-      currentUser.email,
-      playerStats,
-      matchHistory,
+        currentUser.username,
+        currentUser.email,
+        playerStats,
+        matchHistory,
         gameStats,
         latestFriends
-    );
+      );
       const appContainer = document.getElementById("app");
       if (appContainer) {
         appContainer.innerHTML = latestHtml;
-    setTimeout(() => {
-      setupProfilePage(() => {
-        router.navigate("/welcome");
-      });
-    }, 0);
+        setTimeout(() => {
+          setupProfilePage(() => {
+            if (profilePollingInterval) {
+              clearInterval(profilePollingInterval);
+              profilePollingInterval = null;
+            }
+            router.navigate("/post-login");
+          });
+        }, 0);
       }
-  } catch (error) {
-    console.error("Error fetching profile data:", error);
-    router.navigate("/welcome");
+    } catch (error) {
+      console.error("Error fetching profile data:", error);
+      router.navigate("/welcome");
     }
   }
 
@@ -896,10 +924,22 @@ router.addRoute("/profile", async () => {
   profilePollingInterval = setInterval(fetchAndRenderProfile, 5000);
 
   // Clear polling when navigating away
-  window.addEventListener("popstate", () => {
-    if (profilePollingInterval) clearInterval(profilePollingInterval);
-    profilePollingInterval = null;
-  }, { once: true });
+  const cleanupPolling = () => {
+    if (profilePollingInterval) {
+      clearInterval(profilePollingInterval);
+      profilePollingInterval = null;
+    }
+  };
+
+  // Clean up on popstate (browser back/forward)
+  window.addEventListener("popstate", cleanupPolling, { once: true });
+
+  // Clean up on route change
+  const originalHandleRouteChange = router.handleRouteChange;
+  router.handleRouteChange = async () => {
+    cleanupPolling();
+    await originalHandleRouteChange.call(router);
+  };
 
   return latestHtml;
 });
@@ -996,7 +1036,40 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
         }
       }
       if (data.type === "game_start") {
-        console.log('[DEBUG] >>> RECEIVED BACKEND game_start message <<<', data);
+        console.log('[DEBUG] >>> RECEIVED BACKEND "Both players ready, starting game" (game_start message) <<<');
+        console.log('[DEBUG] Received game_start message, starting game');
+        // Both players are ready, start the game
+        if (multiplayerGame) {
+          // Reset game state for both players
+          multiplayerGame.scoreLeft = 0;
+          multiplayerGame.scoreRight = 0;
+          multiplayerGame.scoreLeftElement.textContent = "0";
+          multiplayerGame.scoreRightElement.textContent = "0";
+          multiplayerGame.gameOver = false;
+          multiplayerGame.hasTriggeredGameEnd = false;
+          multiplayerGame.ballX = (multiplayerGame.baseWidth / 2) * multiplayerGame.scale;
+          multiplayerGame.ballY = (multiplayerGame.baseHeight / 2) * multiplayerGame.scale;
+          const speedMultiplier = multiplayerGame.getSpeedMultiplier();
+          multiplayerGame.ballSpeedX = multiplayerGame.baseBallSpeedX * multiplayerGame.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          multiplayerGame.ballSpeedY = multiplayerGame.baseBallSpeedY * multiplayerGame.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+          multiplayerGame.paddleLeftY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
+          multiplayerGame.paddleRightY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
+          
+          // Fix immediate scoring issue by adjusting host's score
+          if (multiplayerGame.isHost) {
+            multiplayerGame.scoreLeft = -1;
+            multiplayerGame.scoreLeftElement.textContent = "-1";
+          }
+          
+          multiplayerGame.gameStarted = true;
+          multiplayerGame.restartButton.style.display = "none";
+          // Start the game loop if host
+          if (multiplayerGame.isHost) {
+            multiplayerGame.pollForGameStart();
+          }
+          multiplayerGame.draw();
+          console.log('[DEBUG] Called draw() on multiplayerGame, gameStarted:', multiplayerGame.gameStarted);
+        }
       }
       if (!assigned && data.type === "assign") {
         isHost = data.host;
@@ -1124,36 +1197,6 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
             multiplayerGame.restartButton.disabled = false;
             console.log('[DEBUG] Neither player ready');
           }
-        }
-      }
-      // Handle game start
-      else if (data.type === "game_start") {
-        console.log('[DEBUG] >>> RECEIVED BACKEND "Both players ready, starting game" (game_start message) <<<');
-        console.log('[DEBUG] Received game_start message, starting game');
-        // Both players are ready, start the game
-        if (multiplayerGame) {
-          // Reset game state for both players
-          multiplayerGame.scoreLeft = 0;
-          multiplayerGame.scoreRight = 0;
-          multiplayerGame.scoreLeftElement.textContent = "0";
-          multiplayerGame.scoreRightElement.textContent = "0";
-          multiplayerGame.gameOver = false;
-          multiplayerGame.hasTriggeredGameEnd = false;
-          multiplayerGame.ballX = (multiplayerGame.baseWidth / 2) * multiplayerGame.scale;
-          multiplayerGame.ballY = (multiplayerGame.baseHeight / 2) * multiplayerGame.scale;
-          const speedMultiplier = multiplayerGame.getSpeedMultiplier();
-          multiplayerGame.ballSpeedX = multiplayerGame.baseBallSpeedX * multiplayerGame.scale * speedMultiplier;
-          multiplayerGame.ballSpeedY = multiplayerGame.baseBallSpeedY * multiplayerGame.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-          multiplayerGame.paddleLeftY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
-          multiplayerGame.paddleRightY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
-          multiplayerGame.gameStarted = true;
-          multiplayerGame.restartButton.style.display = "none";
-          // Start the game loop if host
-          if (multiplayerGame.isHost) {
-            multiplayerGame.pollForGameStart();
-          }
-          multiplayerGame.draw();
-          console.log('[DEBUG] Called draw() on multiplayerGame, gameStarted:', multiplayerGame.gameStarted);
         }
       }
     };
@@ -1466,3 +1509,42 @@ window.addEventListener("popstate", () => {
   console.log("popstate event, pathname:", window.location.pathname);
   router.handleRouteChange();
 });
+
+async function handleLogin(email: string, password: string) {
+  try {
+    const response = await fetch("http://localhost:4000/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      localStorage.setItem("sessionToken", data.sessionToken);
+      statsManager.setCurrentUser({
+        username: data.name,
+        email: data.email,
+        password: "", // Don't store password
+      });
+
+      // Cache the avatar after successful login
+      const avatar = await statsManager.getAvatar(data.name);
+      
+      // Navigate to welcome page
+      router.navigate("/welcome");
+    } else {
+      const errorDiv = document.getElementById("loginError");
+      if (errorDiv) {
+        errorDiv.textContent = data.error;
+      }
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    const errorDiv = document.getElementById("loginError");
+    if (errorDiv) {
+      errorDiv.textContent = "An error occurred during login";
+    }
+  }
+}

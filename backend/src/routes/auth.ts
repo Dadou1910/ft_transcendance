@@ -8,8 +8,6 @@ const uuidv4 = () => crypto.randomUUID();
 
 export async function authRoutes(fastify: FastifyInstance, db: Database) {
   fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
-    fastify.log.info('[Register Debug] Starting registration process');
-    fastify.log.info('[Register Debug] Processing registration request');
     try {
       let name: string | undefined;
       let email: string | undefined;
@@ -41,8 +39,8 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
 
       fastify.log.info(`[Register Debug] Parsed fields - name: ${name}, email: ${email}, avatar: ${avatarBuffer ? 'present' : 'not present'}`);
 
-      if (!name || !email || !password) {
-        reply.code(400);
+    if (!name || !email || !password) {
+      reply.code(400);
         return { error: 'Missing required fields' };
       }
 
@@ -64,7 +62,7 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
         fastify.log.warn(`[Register Debug] User exists - email match: ${existingUser.email === email}, name match: ${existingUser.name === name}`);
         reply.code(400).send({ error: 'User with this email or username already exists' });
         return;
-      }
+    }
 
       fastify.log.info('[Register Debug] Hashing password');
       const hashedPassword = await hash(password, fastify.config.BCRYPT_SALT_ROUNDS);

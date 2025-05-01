@@ -92,8 +92,8 @@ export class MultiplayerPongGame {
     this.navigate = navigate || (() => {});
     // Set initial ball speed using base values and speed multiplier
     const speedMultiplier = this.getSpeedMultiplier();
-    this.ballSpeedX = this.baseBallSpeedX * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-    this.ballSpeedY = this.baseBallSpeedY * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
     // Ensure Back button is always visible
     const backButton = document.getElementById("backButton") as HTMLButtonElement;
     if (backButton) backButton.style.display = "block";
@@ -123,6 +123,18 @@ export class MultiplayerPongGame {
         } else {
           this.keys[e.key as keyof typeof this.keys] = false;
         }
+      }
+    });
+
+    // Settings menu toggle
+    this.settingsButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.settingsMenu.classList.toggle("visible");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!this.settingsContainer.contains(e.target as Node)) {
+        this.settingsMenu.classList.remove("visible");
       }
     });
   }
@@ -195,14 +207,20 @@ export class MultiplayerPongGame {
     const deltaTime = (timestamp - this.lastTime) / 1000;
     this.lastTime = timestamp;
     if (this.isPaused || this.gameOver) return;
+
+    // Target 60 FPS for normalization (1/60 seconds per frame)
+    const frameTime = 1 / 60;
+    const deltaTimeFactor = deltaTime / frameTime; // Scale movements to match 60 FPS
+
     // Paddle movement
-    if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed;
-    if (this.keys.s && this.paddleLeftY < this.baseHeight - 80) this.paddleLeftY += this.paddleSpeed;
-    if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed;
-    if (this.keys.ArrowDown && this.paddleRightY < this.baseHeight - 80) this.paddleRightY += this.paddleSpeed;
+    if (this.keys.w && this.paddleLeftY > 0) this.paddleLeftY -= this.paddleSpeed * deltaTimeFactor;
+    if (this.keys.s && this.paddleLeftY < this.baseHeight - 80) this.paddleLeftY += this.paddleSpeed * deltaTimeFactor;
+    if (this.keys.ArrowUp && this.paddleRightY > 0) this.paddleRightY -= this.paddleSpeed * deltaTimeFactor;
+    if (this.keys.ArrowDown && this.paddleRightY < this.baseHeight - 80) this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
+    
     // Ball movement
-    this.ballX += this.ballSpeedX;
-    this.ballY += this.ballSpeedY;
+    this.ballX += this.ballSpeedX * deltaTimeFactor;
+    this.ballY += this.ballSpeedY * deltaTimeFactor;
     // Collisions
     if (this.ballY <= 0 || this.ballY >= this.baseHeight) this.ballSpeedY = -this.ballSpeedY;
     // Paddle collisions
@@ -255,8 +273,8 @@ export class MultiplayerPongGame {
     this.ballX = this.baseWidth / 2;
     this.ballY = this.baseHeight / 2;
     const speedMultiplier = this.getSpeedMultiplier();
-    this.ballSpeedX = this.baseBallSpeedX * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-    this.ballSpeedY = this.baseBallSpeedY * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
   }
 
   // Both: renders the game using the current state
