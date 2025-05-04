@@ -1,4 +1,5 @@
-import { PlayerStats, MatchRecord, GameStats, StatsManager } from './stats';
+import { PlayerStats, MatchRecord, GameStats, StatsManager } from './stats.js';
+import { API_BASE_URL } from './index.js';
 
 // Manages UI rendering and setup for the Pong Transcendence game
 // Includes welcome pages, game view, forms, and tournament end screen
@@ -69,7 +70,7 @@ export function renderLoggedInWelcomePage(
       </button>
       <div id="sidebar" class="sidebar">
         <img
-          src="http://localhost:4000/avatar/${encodeURIComponent(username)}"
+          src="${API_BASE_URL}/avatar/${encodeURIComponent(username)}"
           class="avatar"
           alt="Profile"
           onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
@@ -235,7 +236,7 @@ export function setupLoggedInWelcomePage(
         friendSearchInput.disabled = true;
         try {
           const sessionToken = localStorage.getItem("sessionToken");
-          const res = await fetch(`http://localhost:4000/users/search?name=${encodeURIComponent(searchName)}`, {
+          const res = await fetch(`${API_BASE_URL}/users/search?name=${encodeURIComponent(searchName)}`, {
             headers: sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}
           });
           const data = await res.json();
@@ -264,7 +265,7 @@ export function setupLoggedInWelcomePage(
               addFriendBtn.disabled = true;
               addFriendBtn.textContent = "Adding...";
               try {
-                const addRes = await fetch("http://localhost:4000/friends/add", {
+                const addRes = await fetch(`${API_BASE_URL}/friends/add`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -773,7 +774,7 @@ export function renderSettingsPage(
     <div class="settings-page">
       <div class="settings-header">
         <img
-          src="http://localhost:4000/avatar/${encodeURIComponent(username)}"
+          src="${API_BASE_URL}/avatar/${encodeURIComponent(username)}"
           class="profile-avatar"
           alt="Profile"
           onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
@@ -932,7 +933,7 @@ export function renderProfilePage(
       <div class="profile-header" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
         <div class="profile-user-info">
           <img
-            src="http://localhost:4000/avatar/${encodeURIComponent(username)}"
+            src="${API_BASE_URL}/avatar/${encodeURIComponent(username)}"
             class="profile-avatar"
             alt="Profile"
             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
@@ -1151,7 +1152,7 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
         return;
       }
       try {
-        const response = await fetch("http://localhost:4000/matchmaking/join", {
+        const response = await fetch(`${API_BASE_URL}/matchmaking/join`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${sessionToken}` },
         });
@@ -1166,7 +1167,7 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
           polling = false;
           const sessionToken = localStorage.getItem("sessionToken");
           if (sessionToken) {
-            fetch("http://localhost:4000/matchmaking/leave", {
+            fetch(`${API_BASE_URL}/matchmaking/leave`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${sessionToken}` },
             }).catch(error => console.error("Error leaving matchmaking:", error));
@@ -1184,7 +1185,7 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
         const poll = async () => {
           if (!polling) return;
           try {
-            const statusRes = await fetch(`http://localhost:4000/matchmaking/status/${userId}`, {
+            const statusRes = await fetch(`${API_BASE_URL}/matchmaking/status/${userId}`, {
               headers: { "Authorization": `Bearer ${sessionToken}` },
             });
             if (!statusRes.ok) {

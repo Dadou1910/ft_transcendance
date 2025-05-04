@@ -38,7 +38,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
     const { matchId } = req.params as { matchId: string };
 
     // Extract token from query parameters
-    const url = new URL(req.url, `http://${req.headers.host}`);
+    const url = new URL(req.url, `https://${req.headers.host}`);
     const token = url.searchParams.get('token');
 
     if (!token) {
@@ -319,7 +319,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
   // Lightweight presence WebSocket endpoint
   fastify.get('/ws/presence', { websocket: true }, async (connection: SocketStream, req: any) => {
     // Extract token from query parameters
-    const url = new URL(req.url, `http://${req.headers.host}`);
+    const url = new URL(req.url, `https://${req.headers.host}`);
     const token = url.searchParams.get('token');
 
     if (!token) {

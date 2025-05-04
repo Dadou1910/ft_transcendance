@@ -1,8 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { hash, compare } from 'bcrypt';
 import { Database } from 'sqlite3';
-import { User } from '../types';
-import { onlineUsers } from './ws';
+import { User } from '../types.js';
+import { onlineUsers } from './ws.js';
 
 const uuidv4 = () => crypto.randomUUID();
 

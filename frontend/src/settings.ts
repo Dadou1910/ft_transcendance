@@ -1,5 +1,6 @@
 import { StatsManager } from "./stats.js";
 import { renderSettingsPage, setupSettingsPage } from "./ui.js";
+import { API_BASE_URL } from './index.js';
 
 export class SettingsView {
   private statsManager: StatsManager;
@@ -25,7 +26,7 @@ export class SettingsView {
     }
 
     try {
-      const response = await fetch("http://localhost:4000/profile/me", {
+      const response = await fetch(`${API_BASE_URL}/profile/me`, {
         headers: {
           "Authorization": `Bearer ${sessionToken}`
         }
@@ -69,7 +70,7 @@ export class SettingsView {
             const formData = new FormData();
             formData.append('avatar', avatarInput.files[0]);
 
-            const avatarResponse = await fetch("http://localhost:4000/avatar", {
+            const avatarResponse = await fetch(`${API_BASE_URL}/avatar`, {
               method: "POST",
               headers: {
                 "Authorization": `Bearer ${sessionToken}`
@@ -98,7 +99,7 @@ export class SettingsView {
 
           // Update profile if username or email changed
           if (Object.keys(profileUpdates).length > 0) {
-            const profileResponse = await fetch("http://localhost:4000/profile/update", {
+            const profileResponse = await fetch(`${API_BASE_URL}/profile/update`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -125,7 +126,7 @@ export class SettingsView {
 
           // Update password if password fields were filled
           if (Object.keys(passwordUpdates).length > 0) {
-            const passwordResponse = await fetch("http://localhost:4000/profile/update", {
+            const passwordResponse = await fetch("https://localhost:4000/profile/update", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",

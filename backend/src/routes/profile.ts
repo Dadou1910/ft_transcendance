@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { Database } from 'sqlite3';
-import { User, Match, UserSettings } from '../types';
+import { User, Match, UserSettings } from '../types.js';
 import { compare, hash } from 'bcrypt';
-import { isUserOnline } from './ws';
+import { isUserOnline } from './ws.js';
 
 export async function profileRoutes(fastify: FastifyInstance, db: Database) {
   fastify.get<{ Params: { id: string } }>('/profile/:id', async (request: any, reply: any) => {

@@ -61,6 +61,9 @@ let isTournamentMode: boolean = false;
 // Stores the backend tournament ID
 let backendTournamentId: number | null = null;
 
+// Update API base URL
+export const API_BASE_URL = window.location.protocol === 'https:' ? 'https://localhost:4000' : 'http://localhost:4000';
+
 // Defines navigate function to handle route changes
 const navigate = (path: string) => router.navigate(path);
 
@@ -77,7 +80,7 @@ async function getCurrentUser(): Promise<{ id: number; username: string; email: 
 
   try {
     console.log("[GetUser Debug] Fetching user profile with sessionToken");
-    const response = await fetch(`http://localhost:4000/profile/me`, {
+    const response = await fetch(`${API_BASE_URL}/profile/me`, {
       headers: { "Authorization": `Bearer ${sessionToken}` }
     });
     console.log("[GetUser Debug] Profile fetch response status:", response.status);
@@ -108,7 +111,7 @@ router.addRoute("/", async () => {
       async () => {
         // Logout callback
         try {
-          await fetch('/api/logout', { method: 'POST' });
+          await fetch(`${API_BASE_URL}/logout`, { method: 'POST' });
           router.navigate('/');
         } catch (error) {
           console.error('Logout failed:', error);
@@ -133,7 +136,7 @@ router.addRoute("/", async () => {
           const sessionToken = localStorage.getItem("sessionToken");
           if (sessionToken) {
             try {
-              await fetch("http://localhost:4000/logout", {
+              await fetch(`${API_BASE_URL}/logout`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${sessionToken}` }
               });
@@ -174,8 +177,8 @@ router.addRoute("/", async () => {
       function connectPresenceWS() {
         const sessionToken = localStorage.getItem("sessionToken");
         if (!sessionToken) return;
-        const wsUrl = `ws://localhost:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
-        presenceSocket = new WebSocket(wsUrl);
+        const presenceWsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
+        presenceSocket = new WebSocket(presenceWsUrl);
         presenceSocket.onopen = () => {
           // Optionally, send a ping or log
           // console.log("Presence WebSocket connected");
@@ -240,7 +243,7 @@ router.addRoute("/register", () => {
       }
 
       console.log("[Registration Debug] Sending registration request to server");
-      const registerResponse = await fetch("http://localhost:4000/register", {
+      const registerResponse = await fetch(`${API_BASE_URL}/register`, {
         method: "POST",
         body: formData
       });
@@ -262,7 +265,7 @@ router.addRoute("/register", () => {
 
       // After registration, login to get the session token
       console.log("[Registration Debug] Registration successful, attempting login");
-      const loginResponse = await fetch("http://localhost:4000/login", {
+      const loginResponse = await fetch("https://localhost:4000/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -330,7 +333,7 @@ router.addRoute("/login", () => {
       console.log("[Login Debug] Login form submitted with email:", email);
       try {
         console.log("[Login Debug] Sending login request to backend");
-        const response = await fetch("http://localhost:4000/login", {
+        const response = await fetch(`${API_BASE_URL}/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
@@ -397,7 +400,7 @@ router.addRoute("/tournament", () => {
       if (!sessionToken) {
         throw new Error("User not logged in");
       }
-      const response = await fetch(`http://localhost:4000/profile/me`, {
+      const response = await fetch(`${API_BASE_URL}/profile/me`, {
         headers: { "Authorization": `Bearer ${sessionToken}` }
       });
       if (!response.ok) throw new Error("Failed to fetch logged-in user");
@@ -407,7 +410,7 @@ router.addRoute("/tournament", () => {
         throw new Error("First player name must match the logged-in user's username");
       }
 
-      const tournamentResponse = await fetch("http://localhost:4000/tournament", {
+      const tournamentResponse = await fetch(`${API_BASE_URL}/tournament`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -475,7 +478,7 @@ async function handleGameRoute(): Promise<string> {
                 try {
                   const sessionToken = localStorage.getItem("sessionToken");
                   if (!sessionToken) throw new Error("User not logged in");
-                  const tournamentResponse = await fetch("http://localhost:4000/tournament", {
+                  const tournamentResponse = await fetch(`${API_BASE_URL}/tournament`, {
                     method: "POST",
                     headers: { 
                       "Content-Type": "application/json",
@@ -556,7 +559,7 @@ async function handleGameRoute(): Promise<string> {
             }
 
             // Create tournament match
-            const matchResponse = await fetch("http://localhost:4000/tournament/match", {
+            const matchResponse = await fetch(`${API_BASE_URL}/tournament/match`, {
               method: "POST",
               headers: { 
                 "Content-Type": "application/json",
@@ -576,7 +579,7 @@ async function handleGameRoute(): Promise<string> {
             const { matchId } = await matchResponse.json();
 
             // Set match winner
-            const winnerResponse = await fetch("http://localhost:4000/tournament/match/winner", {
+            const winnerResponse = await fetch(`${API_BASE_URL}/tournament/match/winner`, {
               method: "POST",
               headers: { 
                 "Content-Type": "application/json",
@@ -789,7 +792,7 @@ router.addRoute("/profile", async () => {
         router.navigate("/login");
         return;
       }
-      const response = await fetch(`http://localhost:4000/profile/me`, {
+      const response = await fetch(`${API_BASE_URL}/profile/me`, {
         headers: { "Authorization": `Bearer ${sessionToken}` }
       });
       if (!response.ok) throw new Error("Failed to fetch profile data");
@@ -904,7 +907,8 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       return;
     }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.hostname}:4000/ws/match/${matchId}?token=${encodeURIComponent(sessionToken)}`);
+    const wsUrl = `${protocol}//${window.location.hostname}:4000/ws/match/${matchId}?token=${encodeURIComponent(sessionToken)}`;
+    const ws = new WebSocket(wsUrl);
     
     let localPlayerReady = false;
     let remotePlayerReady = false;
@@ -1083,7 +1087,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
             // Notify backend to leave match or queue
             const sessionToken = localStorage.getItem("sessionToken");
             if (sessionToken) {
-              fetch("http://localhost:4000/matchmaking/leave", {
+              fetch(`${API_BASE_URL}/matchmaking/leave`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${sessionToken}` },
               }).then(() => {
@@ -1189,7 +1193,7 @@ function setupRouteListeners() {
         const sessionToken = localStorage.getItem("sessionToken");
         if (sessionToken) {
           try {
-            await fetch("http://localhost:4000/logout", {
+            await fetch(`${API_BASE_URL}/logout`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${sessionToken}` }
             });
@@ -1291,7 +1295,7 @@ function setupRouteListeners() {
           formData.append('avatar', avatar);
         }
 
-        const registerResponse = await fetch("http://localhost:4000/register", {
+        const registerResponse = await fetch(`${API_BASE_URL}/register`, {
           method: "POST",
           body: formData
         });
@@ -1311,7 +1315,7 @@ function setupRouteListeners() {
 
         // After registration, login to get the session token
         console.log("[Registration Debug] Registration successful, attempting login");
-        const loginResponse = await fetch("http://localhost:4000/login", {
+        const loginResponse = await fetch(`${API_BASE_URL}/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
@@ -1353,7 +1357,7 @@ function setupRouteListeners() {
       async (email, password) => {
         console.log("Login form submitted from setup with:", { email });
         try {
-          const response = await fetch("http://localhost:4000/login", {
+          const response = await fetch(`${API_BASE_URL}/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
@@ -1411,7 +1415,7 @@ function setupRouteListeners() {
 
               // Create tournament on backend with usernames
               const sessionToken = localStorage.getItem("sessionToken");
-              const tournamentResponse = await fetch("http://localhost:4000/tournament", {
+              const tournamentResponse = await fetch(`${API_BASE_URL}/tournament`, {
                 method: "POST",
                 headers: { 
                   "Content-Type": "application/json",
@@ -1454,7 +1458,7 @@ window.addEventListener("popstate", () => {
 
 async function handleLogin(email: string, password: string) {
   try {
-    const response = await fetch("http://localhost:4000/login", {
+    const response = await fetch(`${API_BASE_URL}/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
