@@ -294,9 +294,30 @@ export class MultiplayerPongGame {
   public pollForGameStart() {
     const poll = () => {
       if (this.gameStarted && !this.gameLoopRunning) {
-        console.log('[DEBUG] Poll: gameStarted detected, game loop started');
-        this.startGameLoop();
-        this.gameLoopRunning = true;
+        console.log('========== DEBUG: GAME LOOP STARTED FROM POLLFORGAMESTART() ==========');
+        let countdown = 3;
+        const countdownInterval = setInterval(() => {
+          if (countdown > 0) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.draw();
+            this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+            this.ctx.fillStyle = "white";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+            this.ctx.shadowBlur = 10 * this.scale;
+            this.ctx.shadowOffsetX = 0;
+            this.ctx.shadowOffsetY = 0;
+            this.ctx.fillText(countdown.toString(), this.canvas.width / 2, this.canvas.height / 2);
+            this.ctx.shadowColor = "transparent";
+            this.ctx.shadowBlur = 0;
+            countdown--;
+          } else {
+            clearInterval(countdownInterval);
+            this.startGameLoop();
+            this.gameLoopRunning = true;
+          }
+        }, 1000);
       } else {
         requestAnimationFrame(poll);
       }
@@ -406,14 +427,14 @@ export class MultiplayerPongGame {
   public draw(timestamp: number = performance.now()) {
     // Clear canvas
     this.ctx.fillStyle = this.backgroundColor;
-    this.ctx.fillRect(0, 0, this.baseWidth, this.baseHeight);
+    this.ctx.fillRect(0, 0, this.baseWidth * this.scale, this.baseHeight * this.scale);
     // Draw paddles
     this.ctx.fillStyle = "white";
-    this.ctx.fillRect(10, this.paddleLeftY, 20, 80);
-    this.ctx.fillRect(this.baseWidth - 30, this.paddleRightY, 20, 80);
+    this.ctx.fillRect(10 * this.scale, this.paddleLeftY, 20 * this.scale, 80 * this.scale);
+    this.ctx.fillRect((this.baseWidth - 30) * this.scale, this.paddleRightY, 20 * this.scale, 80 * this.scale);
     // Draw ball
     this.ctx.beginPath();
-    this.ctx.arc(this.ballX, this.ballY, 10, 0, Math.PI * 2);
+    this.ctx.arc(this.ballX, this.ballY, 10 * this.scale, 0, Math.PI * 2);
     this.ctx.fillStyle = "white";
     this.ctx.fill();
     // Draw scores

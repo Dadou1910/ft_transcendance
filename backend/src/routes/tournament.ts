@@ -31,7 +31,7 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
     const user = request.user;
     if (usernames[0] !== user.name) {
       reply.code(400);
-      return { error: 'First username must be the logged-in user’s username' };
+      return { error: "First username must be the logged-in user's username" };
     }
 
     try {
@@ -237,8 +237,13 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
         if (winnerUser) {
           await new Promise<void>((resolve, reject) => {
             db.run('UPDATE users SET tournamentsWon = tournamentsWon + 1 WHERE name = ?', [winner], (err) => {
-              if (err) reject(err);
-              resolve();
+              if (err) {
+                console.error('[Tournament Debug] Error incrementing tournamentsWon for user:', winner, err);
+                reject(err);
+              } else {
+                console.log('[Tournament Debug] Incremented tournamentsWon for user:', winner);
+                resolve();
+              }
             });
           });
           fastify.log.info('Updated tournamentsWon for user:', { winner });

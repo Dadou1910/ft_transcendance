@@ -53,6 +53,7 @@ const tournament = new Tournament(statsManager, tournamentId);
 const router = new Router("app", setupRouteListeners);
 // Stores the current game instance (PongGame, NeonCityPong, AIPong, or SpaceBattle)
 let gameInstance: PongGame | SpaceBattle | null = null;
+(window as any).gameInstance = null;
 // Stores the current tournament bracket instance
 let bracketInstance: Bracket | null = null;
 // Tracks whether the game is in tournament mode
@@ -304,6 +305,23 @@ router.addRoute("/register", () => {
   });
 });
 
+// Defines standard game route ("/game")
+router.addRoute("/game", () => {
+  // Since addRoute expects a synchronous string return, we call the async handler
+  // and immediately return a placeholder string. The actual rendering is handled
+  // by the async function.
+  handleGameRoute().then(html => {
+    const appContainer = document.getElementById("app");
+    if (appContainer) {
+      appContainer.innerHTML = html;
+    }
+  }).catch(error => {
+    console.error("Error in /game route:", error);
+    router.navigate("/"); // Redirect to root on error
+  });
+  return ""; // Return placeholder string synchronously
+});
+
 // Defines login route ("/login")
 router.addRoute("/login", () => {
   console.log("[Login Debug] Rendering /login route");
@@ -504,7 +522,7 @@ async function handleGameRoute(): Promise<string> {
   const html = renderGameView(left, right, isTournamentMode ? bracketInstance?.getCurrentRound() : undefined);
   // Initializes standard PongGame instance
   setTimeout(async () => {
-    const currentUser = await getCurrentUser(); // Fetch again in case of timing issues
+    const currentUser = await getCurrentUser();
     if (!currentUser) {
       router.navigate("/login");
       return;
@@ -602,54 +620,14 @@ async function handleGameRoute(): Promise<string> {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.username || null,
+      onGameEnd,
       navigate,
-      (winnerName: string) => {
-        // Handle game end
-        if (winnerName) {
-          console.log(`Game over! Winner: ${winnerName}`);
-        }
-      }
+      isTournamentMode
     );
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 }
-
-// Defines standard game route ("/game")
-router.addRoute("/game", () => {
-  if (!tournament.hasPlayers()) {
-    router.navigate("/");
-    return "";
-  }
-  let left: string, right: string;
-  [left, right] = tournament.getPlayers();
-  const html = renderGameView(left, right);
-  setTimeout(() => {
-    gameInstance = new PongGame(
-      left,
-      right,
-      "pongCanvas",
-      "speedSlider",
-      "backgroundColorSelect",
-      "scoreLeft",
-      "scoreRight",
-      "restartButton",
-      "settingsButton",
-      "settingsMenu",
-      "settingsContainer",
-      statsManager,
-      statsManager.getCurrentUser()?.username || null,
-      (winnerName: string) => {
-        // Handle game end
-        if (winnerName) {
-          console.log(`Game over! Winner: ${winnerName}`);
-        }
-      },
-      navigate
-    );
-  }, 0);
-  return html;
-});
-
 
 // Defines neon city game route ("/neonCityGame")
 router.addRoute("/neonCityGame", () => {
@@ -683,6 +661,7 @@ router.addRoute("/neonCityGame", () => {
         }
       }
     );
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 });
@@ -719,6 +698,7 @@ router.addRoute("/aiGame", () => {
         }
       }
     );
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 });
@@ -755,6 +735,7 @@ router.addRoute("/spaceBattleGame", () => {
         }
       }
     );
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 });
@@ -862,7 +843,7 @@ router.addRoute("/profile", async () => {
               clearInterval(profilePollingInterval);
               profilePollingInterval = null;
             }
-            router.navigate("/post-login");
+            router.navigate("/");
           });
         }, 0);
       }

@@ -40,6 +40,15 @@ export class Router {
   async handleRouteChange() {
     let path = window.location.pathname;
     console.log("Handling route change, path:", path);
+
+    // Clean up any existing game instance
+    const gameInstance = (window as any).gameInstance;
+    if (gameInstance && typeof gameInstance.cleanup === 'function') {
+      gameInstance.cleanup();
+      gameInstance.gameOver = true;
+      (window as any).gameInstance = null;
+    }
+
     // Default to root path if none provided
     if (!path || path === "/") {
       path = "/";

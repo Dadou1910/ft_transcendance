@@ -404,6 +404,7 @@ export class PongGame {
           this.restartButton.style.display = "block";
           const backButton = document.getElementById("backButton") as HTMLButtonElement;
           if (backButton) backButton.style.display = "block";
+          
           if (!this.isTournamentMode) { // Only record match if not in tournament mode
             this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
               player1Score: this.scoreLeft,
@@ -411,6 +412,7 @@ export class PongGame {
               sessionToken: localStorage.getItem("sessionToken")
             });
           }
+
           if (this.onGameEnd && !this.hasTriggeredGameEnd) {
             this.hasTriggeredGameEnd = true; // Prevent multiple triggers
             this.onGameEnd(this.playerLeftName);

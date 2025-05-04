@@ -205,8 +205,29 @@ export class MultiplayerSpaceBattle {
     const poll = () => {
       if (this.gameStarted && !this.gameLoopRunning) {
         console.log('========== DEBUG: GAME LOOP STARTED FROM POLLFORGAMESTART() ==========');
-        this.startGameLoop();
-        this.gameLoopRunning = true;
+        let countdown = 3;
+        const countdownInterval = setInterval(() => {
+          if (countdown > 0) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.draw();
+            this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+            this.ctx.fillStyle = "white";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+            this.ctx.shadowBlur = 10 * this.scale;
+            this.ctx.shadowOffsetX = 0;
+            this.ctx.shadowOffsetY = 0;
+            this.ctx.fillText(countdown.toString(), this.canvas.width / 2, this.canvas.height / 2);
+            this.ctx.shadowColor = "transparent";
+            this.ctx.shadowBlur = 0;
+            countdown--;
+          } else {
+            clearInterval(countdownInterval);
+            this.startGameLoop();
+            this.gameLoopRunning = true;
+          }
+        }, 1000);
       } else {
         requestAnimationFrame(poll);
       }
@@ -421,6 +442,8 @@ export class MultiplayerSpaceBattle {
       this.ctx.textBaseline = "middle";
       this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
       this.ctx.shadowBlur = 10 * this.scale;
+      this.ctx.shadowOffsetX = 0;
+      this.ctx.shadowOffsetY = 0;
       this.ctx.fillText(
         this.scoreLeft >= 10 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
         this.canvas.width / 2,
