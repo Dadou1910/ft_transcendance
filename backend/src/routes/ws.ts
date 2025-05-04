@@ -206,11 +206,27 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
             // If both players are ready, notify them to start the game
             if (hostReady && guestReady) {
               fastify.log.info('Both players ready, starting game');
-              if (matchClients[matchId].host?.socket.socket.readyState === 1) {
-                matchClients[matchId].host.socket.socket.send(JSON.stringify({ type: 'game_start' }));
+              try {
+                if (matchClients[matchId].host?.socket.socket.readyState === 1) {
+                  fastify.log.info(`Sending game_start to host (${matchClients[matchId].host.name})`);
+                  matchClients[matchId].host.socket.socket.send(JSON.stringify({ type: 'game_start' }));
+                  fastify.log.info('Sent game_start to host');
+                } else {
+                  fastify.log.warn('Host WebSocket not open when trying to send game_start');
+                }
+              } catch (err) {
+                fastify.log.error('Error sending game_start to host:', err);
               }
-              if (matchClients[matchId].guest?.socket.socket.readyState === 1) {
-                matchClients[matchId].guest.socket.socket.send(JSON.stringify({ type: 'game_start' }));
+              try {
+                if (matchClients[matchId].guest?.socket.socket.readyState === 1) {
+                  fastify.log.info(`Sending game_start to guest (${matchClients[matchId].guest.name})`);
+                  matchClients[matchId].guest.socket.socket.send(JSON.stringify({ type: 'game_start' }));
+                  fastify.log.info('Sent game_start to guest');
+                } else {
+                  fastify.log.warn('Guest WebSocket not open when trying to send game_start');
+                }
+              } catch (err) {
+                fastify.log.error('Error sending game_start to guest:', err);
               }
             }
             return;

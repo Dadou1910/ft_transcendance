@@ -44,6 +44,13 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
         return { error: 'Missing required fields' };
       }
 
+      // Password requirements: at least 8 characters, one number, one special character
+      const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
+      if (!passwordRegex.test(password)) {
+        reply.code(400);
+        return { error: 'Password must be at least 8 characters, include a number and a special character.' };
+      }
+
       fastify.log.info('[Register Debug] Checking for existing user');
       // Check if user already exists
       const existingUser = await new Promise<User | undefined>((resolve, reject) => {

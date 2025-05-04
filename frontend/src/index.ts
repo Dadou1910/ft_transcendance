@@ -1,3 +1,4 @@
+import { MultiplayerSpaceBattle } from './multiplayerSpaceBattle.js';
 const uuidv4 = () => crypto.randomUUID();
 // Imports Router class for client-side routing
 import { Router } from "./router.js";
@@ -637,63 +638,18 @@ router.addRoute("/game", () => {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.username || null,
-      navigate,
       (winnerName: string) => {
         // Handle game end
         if (winnerName) {
           console.log(`Game over! Winner: ${winnerName}`);
         }
-      }
+      },
+      navigate
     );
   }, 0);
   return html;
 });
 
-// Add game routes
-router.addRoute('/game/neon', async () => {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    router.navigate('/login');
-    return '';
-  }
-  return renderGameView(currentUser.username, 'Player 2');
-});
-
-router.addRoute('/game/space', async () => {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    router.navigate('/login');
-    return '';
-  }
-  return renderGameView(currentUser.username, 'Player 2');
-});
-
-router.addRoute('/game/ai', async () => {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    router.navigate('/login');
-    return '';
-  }
-  return renderGameView(currentUser.username, 'AI Opponent');
-});
-
-router.addRoute('/game/multiplayer', async () => {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    router.navigate('/login');
-    return '';
-  }
-  return renderMultiplayerMenu();
-});
-
-router.addRoute('/game/classic', async () => {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    router.navigate('/login');
-    return '';
-  }
-  return renderGameView(currentUser.username, 'Player 2');
-});
 
 // Defines neon city game route ("/neonCityGame")
 router.addRoute("/neonCityGame", () => {
@@ -923,7 +879,7 @@ router.addRoute("/profile", async () => {
   if (profilePollingInterval) clearInterval(profilePollingInterval);
   profilePollingInterval = setInterval(fetchAndRenderProfile, 5000);
 
-  // Clear polling when navigating away
+  // Clean up polling when navigating away
   const cleanupPolling = () => {
     if (profilePollingInterval) {
       clearInterval(profilePollingInterval);
@@ -932,12 +888,13 @@ router.addRoute("/profile", async () => {
   };
 
   // Clean up on popstate (browser back/forward)
-  window.addEventListener("popstate", cleanupPolling, { once: true });
+  window.addEventListener("popstate", cleanupPolling);
 
   // Clean up on route change
   const originalHandleRouteChange = router.handleRouteChange;
   router.handleRouteChange = async () => {
     cleanupPolling();
+    window.removeEventListener("popstate", cleanupPolling);
     await originalHandleRouteChange.call(router);
   };
 
@@ -953,6 +910,8 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
     router.navigate("/");
     return "";
   }
+  // Read the selected game type
+  const multiplayerGameType = sessionStorage.getItem("multiplayerGameType") || "pong";
   // Render the standard Pong game view with placeholder names
   const html = renderGameView(currentUser.username, "Waiting for opponent...");
   setTimeout(() => {
@@ -971,7 +930,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
     let isHost = false;
     let assigned = false;
     let opponentName = "Waiting for opponent...";
-    let multiplayerGame: MultiplayerPongGame | null = null;
+    let multiplayerGame: any = null;
 
     // Store event listener references for cleanup
     const keydownListener = (e: KeyboardEvent) => {
@@ -999,7 +958,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       if (!multiplayerGame) return;
       console.log('[DEBUG] Start button clicked. localPlayerReady:', localPlayerReady);
       if (!localPlayerReady) {
-      localPlayerReady = true;
+        localPlayerReady = true;
         multiplayerGame.restartButton.textContent = 'Waiting for opponent...';
         multiplayerGame.restartButton.disabled = true;
         ws.send(JSON.stringify({ type: 'ready' }));
@@ -1010,17 +969,16 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
     ws.onopen = () => {
       // Send a join message to get assigned
       ws.send(JSON.stringify({ type: "join", user: currentUser.username }));
-      // Show start button immediately
-      if (multiplayerGame) {
-        multiplayerGame.restartButton.style.display = "block";
-        multiplayerGame.restartButton.textContent = "Start";
-        multiplayerGame.restartButton.disabled = false;
-      }
       console.log('[DEBUG] WebSocket connection opened');
     };
 
     ws.onclose = (event) => {
       console.log('[DEBUG] WebSocket closed:', event);
+      if (multiplayerGame) {
+        multiplayerGame.cleanup();
+        multiplayerGame = null;
+      }
+      navigate('/'); // Or navigate('/multiplayer') if you prefer
     };
 
     ws.onerror = (event) => {
@@ -1029,46 +987,47 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      // Forward all messages to the game instance if it has handleWebSocketMessage
+      if (multiplayerGame && typeof multiplayerGame.handleWebSocketMessage === "function") {
+        multiplayerGame.handleWebSocketMessage(data);
+        return; // Prevent further game-specific logic
+      }
       if (data.type === "cleanup") {
+        if (data.reason === "opponent_left") {
+          alert("The other player has left the game. You have been redirected to the welcome page.");
+        }
         if (multiplayerGame) {
           multiplayerGame.cleanup();
           navigate('/');
         }
       }
       if (data.type === "game_start") {
-        console.log('[DEBUG] >>> RECEIVED BACKEND "Both players ready, starting game" (game_start message) <<<');
-        console.log('[DEBUG] Received game_start message, starting game');
-        // Both players are ready, start the game
         if (multiplayerGame) {
-          // Reset game state for both players
+          // Reset game state
           multiplayerGame.scoreLeft = 0;
           multiplayerGame.scoreRight = 0;
           multiplayerGame.scoreLeftElement.textContent = "0";
           multiplayerGame.scoreRightElement.textContent = "0";
           multiplayerGame.gameOver = false;
-          multiplayerGame.hasTriggeredGameEnd = false;
-          multiplayerGame.ballX = (multiplayerGame.baseWidth / 2) * multiplayerGame.scale;
-          multiplayerGame.ballY = (multiplayerGame.baseHeight / 2) * multiplayerGame.scale;
-          const speedMultiplier = multiplayerGame.getSpeedMultiplier();
-          multiplayerGame.ballSpeedX = multiplayerGame.baseBallSpeedX * multiplayerGame.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-          multiplayerGame.ballSpeedY = multiplayerGame.baseBallSpeedY * multiplayerGame.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-          multiplayerGame.paddleLeftY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
-          multiplayerGame.paddleRightY = (multiplayerGame.baseHeight / 2 - 40) * multiplayerGame.scale;
-          
-          // Fix immediate scoring issue by adjusting host's score
-          if (multiplayerGame.isHost) {
-            multiplayerGame.scoreLeft = -1;
-            multiplayerGame.scoreLeftElement.textContent = "-1";
-          }
-          
           multiplayerGame.gameStarted = true;
-          multiplayerGame.restartButton.style.display = "none";
-          // Start the game loop if host
-          if (multiplayerGame.isHost) {
-            multiplayerGame.pollForGameStart();
+          multiplayerGame.isPaused = false;
+          if (multiplayerGameType === "spaceBattle") {
+            multiplayerGame.targets = [];
+            multiplayerGame.projectiles = [];
+            multiplayerGame.targetSpawnTimer = 0;
+            multiplayerGame.leftShootTimer = 0;
+            multiplayerGame.rightShootTimer = 0;
+          } else {
+            multiplayerGame.paddleLeftY = 160;
+            multiplayerGame.paddleRightY = 160;
+            multiplayerGame.ballX = 400;
+            multiplayerGame.ballY = 200;
+            multiplayerGame.ballSpeedX = 6.0;
+            multiplayerGame.ballSpeedY = 4.1;
           }
+          multiplayerGame.restartButton.style.display = "none";
           multiplayerGame.draw();
-          console.log('[DEBUG] Called draw() on multiplayerGame, gameStarted:', multiplayerGame.gameStarted);
+          return;
         }
       }
       if (!assigned && data.type === "assign") {
@@ -1078,35 +1037,59 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
         
         // Initialize the game for both host and guest
         if (!multiplayerGame) {
-          multiplayerGame = new MultiplayerPongGame(
-            isHost ? currentUser.username : opponentName,
-            isHost ? opponentName : currentUser.username,
-            "pongCanvas",
-            "speedSlider",
-            "backgroundColorSelect",
-            "scoreLeft",
-            "scoreRight",
-            "restartButton",
-            "settingsButton",
-            "settingsMenu",
-            "settingsContainer",
-            statsManager,
-            currentUser.username,
-            undefined,
-            navigate
-          );
-          multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+          if (multiplayerGameType === "spaceBattle") {
+            multiplayerGame = new MultiplayerSpaceBattle(
+              isHost ? currentUser.username : opponentName,
+              isHost ? opponentName : currentUser.username,
+              "pongCanvas",
+              "speedSlider",
+              "backgroundColorSelect",
+              "scoreLeft",
+              "scoreRight",
+              "restartButton",
+              "settingsButton",
+              "settingsMenu",
+              "settingsContainer",
+              statsManager,
+              currentUser.username,
+              navigate,
+              matchId,
+              isHost
+            );
+            multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+            multiplayerGame.pollForGameStart();
+          } else {
+            multiplayerGame = new MultiplayerPongGame(
+              isHost ? currentUser.username : opponentName,
+              isHost ? opponentName : currentUser.username,
+              "pongCanvas",
+              "speedSlider",
+              "backgroundColorSelect",
+              "scoreLeft",
+              "scoreRight",
+              "restartButton",
+              "settingsButton",
+              "settingsMenu",
+              "settingsContainer",
+              statsManager,
+              currentUser.username,
+              navigate
+            );
+            multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+            multiplayerGame.pollForGameStart();
+          }
           multiplayerGame.restartButton.style.display = "block";
           multiplayerGame.restartButton.textContent = "Start";
           multiplayerGame.restartButton.disabled = false;
           multiplayerGame.restartButton.onclick = startGame;
-          if (!isHost) {
+          if (!isHost && multiplayerGameType !== "spaceBattle") {
             document.addEventListener("keydown", keydownListener);
             document.addEventListener("keyup", keyupListener);
           }
           multiplayerGame.draw();
-          multiplayerGame.attachBackButtonListener();
-          
+          if (typeof multiplayerGame.attachBackButtonListener === "function") {
+            multiplayerGame.attachBackButtonListener();
+          }
           // Ensure cleanup and WebSocket close on navigation
           const cleanupAndClose = () => {
             if (multiplayerGame) {
@@ -1130,7 +1113,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
           };
           window.addEventListener("popstate", cleanupAndClose, { once: true });
           window.addEventListener("beforeunload", cleanupAndClose, { once: true });
-          console.log('[DEBUG] MultiplayerPongGame assigned and draw loop started');
+          console.log('[DEBUG] Multiplayer game assigned and draw loop started');
         }
 
         // Update player names
@@ -1167,7 +1150,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
         if (rightNameElem) rightNameElem.textContent = multiplayerGame.playerRightName;
           const leftNameElem = document.getElementById("playerLeftNameDisplay");
         if (leftNameElem) leftNameElem.textContent = multiplayerGame.playerLeftName;
-        console.log('[DEBUG] MultiplayerPongGame opponent joined and name updated');
+        console.log('[DEBUG] Multiplayer game opponent joined and name updated');
       }
       // Handle paddle and state messages for multiplayer
       else if (multiplayerGame && data.type === "paddle") {
@@ -1176,29 +1159,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       else if (multiplayerGame && data.type === "state") {
         multiplayerGame.handleStateMessage(data);
       }
-      // Handle ready state updates
-      else if (data.type === "ready_state") {
-        console.log('[DEBUG] Handling ready_state:', data);
-        // Update the start button state based on both players' ready states
-        if (multiplayerGame) {
-          if (data.hostReady && data.guestReady) {
-            // Both players are ready, game will start automatically
-            multiplayerGame.restartButton.textContent = 'Starting game...';
-            multiplayerGame.restartButton.disabled = true;
-            console.log('[DEBUG] Both players ready, waiting for game_start');
-          } else if (localPlayerReady) {
-            // Local player is ready but opponent isn't
-            multiplayerGame.restartButton.textContent = 'Waiting for opponent...';
-            multiplayerGame.restartButton.disabled = true;
-            console.log('[DEBUG] Local player ready, waiting for opponent');
-          } else {
-            // Neither player is ready
-            multiplayerGame.restartButton.textContent = 'Start';
-            multiplayerGame.restartButton.disabled = false;
-            console.log('[DEBUG] Neither player ready');
-          }
-        }
-      }
+      
     };
 
     // In /multiplayerGame/:matchId route, after initializing multiplayerGame (both host and guest), always show the back button

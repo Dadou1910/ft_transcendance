@@ -559,7 +559,7 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
 
     // Validate password: 8+ characters, 1 number, 1 special character
     const password = passwordInput.value;
-    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
+    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
     if (!passwordRegex.test(password)) {
       passwordError.classList.add("visible");
       isValid = false;
@@ -1102,12 +1102,17 @@ export function renderMultiplayerMenu(): string {
     <div class="full-screen-container">
       <div class="welcome-container">
         <h1 class="neon-title">
-          Multiplayer Pong
+          Multiplayer
         </h1>
         <p class="welcome-subtitle">
           Play against other players online
         </p>
         <div class="flex flex-col gap-4">
+          <label for="multiplayerGameTypeSelect" style="color:white;font-weight:bold;">Game Type:</label>
+          <select id="multiplayerGameTypeSelect" class="welcome-button" style="color:black;">
+            <option value="pong">Pong</option>
+            <option value="spaceBattle">Space Battle</option>
+          </select>
           <button id="matchmakingButton" class="welcome-button">
             Matchmaking
           </button>
@@ -1128,9 +1133,16 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
   const matchmakingButton = document.getElementById("matchmakingButton");
   const inviteFriendButton = document.getElementById("inviteFriendButton");
   const backButton = document.getElementById("backButton");
+  const gameTypeSelect = document.getElementById("multiplayerGameTypeSelect") as HTMLSelectElement;
 
   if (matchmakingButton) {
     matchmakingButton.addEventListener("click", async () => {
+      // Store selected game type in sessionStorage
+      if (gameTypeSelect) {
+        sessionStorage.setItem("multiplayerGameType", gameTypeSelect.value);
+      } else {
+        sessionStorage.setItem("multiplayerGameType", "pong");
+      }
       // Start matchmaking
       const sessionToken = localStorage.getItem("sessionToken");
       if (!sessionToken) {
@@ -1138,57 +1150,47 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
         navigate("/login");
         return;
       }
-      
       try {
-        // Join matchmaking
         const response = await fetch("http://localhost:4000/matchmaking/join", {
           method: "POST",
           headers: { "Authorization": `Bearer ${sessionToken}` },
         });
-        
         if (!response.ok) {
           throw new Error("Failed to join matchmaking");
         }
-        
         const data = await response.json();
-        console.log("Matchmaking join response:", data);
-        
-        // Always show waiting UI first unless explicitly paired
         const app = document.getElementById("app");
         if (app) app.innerHTML = renderWaitingForOpponent();
         let polling = true;
-        
         setupWaitingForOpponent(() => {
           polling = false;
+          const sessionToken = localStorage.getItem("sessionToken");
+          if (sessionToken) {
+            fetch("http://localhost:4000/matchmaking/leave", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${sessionToken}` },
+            }).catch(error => console.error("Error leaving matchmaking:", error));
+          }
           navigate("/multiplayer");
         });
-
-        // Only navigate to game if explicitly paired with a match ID
         if (data.status === "ready" && data.matchId) {
           navigate(`/multiplayerGame/${data.matchId}`);
           return;
         }
-
-        // Otherwise, start polling for match
         const userId = data.userId;
         if (!userId) {
           throw new Error("No user ID received from matchmaking");
         }
-
         const poll = async () => {
           if (!polling) return;
           try {
             const statusRes = await fetch(`http://localhost:4000/matchmaking/status/${userId}`, {
               headers: { "Authorization": `Bearer ${sessionToken}` },
             });
-            
             if (!statusRes.ok) {
               throw new Error("Failed to get matchmaking status");
             }
-            
             const status = await statusRes.json();
-            console.log("Matchmaking status:", status);
-            
             if (status.status === "ready" && status.matchId) {
               navigate(`/multiplayerGame/${status.matchId}`);
             } else {
@@ -1200,7 +1202,6 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
             navigate("/multiplayer");
           }
         };
-        
         poll();
       } catch (error) {
         console.error("Matchmaking error:", error);
@@ -1209,13 +1210,11 @@ export function setupMultiplayerMenu(navigate: (path: string) => void): void {
       }
     });
   }
-
   if (inviteFriendButton) {
     inviteFriendButton.addEventListener("click", () => {
       alert("Friend invites coming soon!");
     });
   }
-
   if (backButton) {
     backButton.addEventListener("click", () => {
       navigate("/");

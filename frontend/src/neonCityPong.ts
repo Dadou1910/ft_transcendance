@@ -540,6 +540,30 @@ export class NeonCityPong extends PongGame {
       }
     }
 
+    // Draw countdown if active
+    if (this.isCountingDown) {
+      const currentTime = performance.now();
+      const elapsed = (currentTime - this.countdownStartTime) / 1000;
+      const remaining = Math.ceil(3 - elapsed);
+      
+      if (remaining > 0) {
+        this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+        this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+        this.ctx.shadowBlur = 10 * this.scale;
+        this.ctx.shadowOffsetX = 0;
+        this.ctx.shadowOffsetY = 0;
+        this.ctx.fillText(remaining.toString(), this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.shadowColor = "transparent";
+        this.ctx.shadowBlur = 0;
+      } else {
+        this.isCountingDown = false;
+        this.gameStarted = true;
+      }
+    }
+
     // Draw buildings
     this.drawBuildings(this.ctx);
 

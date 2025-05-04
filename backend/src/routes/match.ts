@@ -31,7 +31,7 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
     }
 
     // Validate gameType
-    const validGameTypes = ['Pong', 'Neon City Pong', 'AI Pong', 'Space Battle', 'Online Pong'];
+    const validGameTypes = ['Pong', 'Neon City Pong', 'AI Pong', 'Space Battle', 'Online Pong', 'Online Space Battle'];
     if (!validGameTypes.includes(gameType)) {
       fastify.log.warn('Validation failed: Invalid gameType:', gameType);
       reply.code(400);

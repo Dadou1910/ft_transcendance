@@ -125,7 +125,7 @@ export class SettingsView {
 
           // Update password if password fields were filled
           if (Object.keys(passwordUpdates).length > 0) {
-            const passwordResponse = await fetch("http://localhost:4000/profile/update-password", {
+            const passwordResponse = await fetch("http://localhost:4000/profile/update", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",

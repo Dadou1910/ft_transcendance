@@ -38,7 +38,10 @@ export class PongGame {
   public backgroundColor: string = "#d8a8b5";
   public onGameEnd?: (winnerName: string) => void;
 
-  // Tournament mode flag
+  protected countdown: number = 0;
+  protected countdownStartTime: number = 0;
+  protected isCountingDown: boolean = false;
+
   public isTournamentMode: boolean;
 
   // Flag to prevent multiple onGameEnd triggers
@@ -199,24 +202,12 @@ export class PongGame {
       }
     });
 
-    // Start/Restart button
+    // Start button
     this.restartButton.addEventListener("click", () => {
       if (!this.gameStarted) {
-        this.gameStarted = true;
-        this.restartButton.style.display = "none";
+        this.startCountdown();
       } else {
-        this.scoreLeft = 0;
-        this.scoreRight = 0;
-        this.scoreLeftElement.textContent = "0";
-        this.scoreRightElement.textContent = "0";
-        this.gameOver = false;
-        this.hasTriggeredGameEnd = false;
-        this.ballX = (this.baseWidth / 2) * this.scale;
-        this.ballY = (this.baseHeight / 2) * this.scale;
-        const speedMultiplier = this.getSpeedMultiplier();
-        this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
-        this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-        this.restartButton.style.display = "none";
+        this.resetGame();
       }
     });
 
@@ -237,6 +228,39 @@ export class PongGame {
     });
   }
 
+  // Start the countdown before game begins
+  protected startCountdown(): void {
+    this.countdown = 3;
+    this.countdownStartTime = performance.now();
+    this.isCountingDown = true;
+    this.gameStarted = false;
+    this.gameOver = false;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.scoreLeftElement.textContent = "0";
+    this.scoreRightElement.textContent = "0";
+    this.restartButton.style.display = "none";
+    const backButton = document.getElementById("backButton") as HTMLButtonElement;
+    if (backButton) backButton.style.display = "none";
+  }
+
+  // Reset the game state
+  private resetGame(): void {
+    this.gameStarted = true;
+    this.isPaused = false;
+    this.gameOver = false;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.scoreLeftElement.textContent = "0";
+    this.scoreRightElement.textContent = "0";
+    this.ballX = (this.baseWidth / 2) * this.scale;
+    this.ballY = (this.baseHeight / 2) * this.scale;
+    const speedMultiplier = this.getSpeedMultiplier();
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+    this.restartButton.style.display = "none";
+  }
+
   // Renders the game and updates game state
   public draw(timestamp: number = performance.now()) {
     // Calculate delta time (in seconds)
@@ -255,6 +279,36 @@ export class PongGame {
     this.ctx.fillStyle = "white";
     this.ctx.fillRect(10 * this.scale, this.paddleLeftY, 20 * this.scale, 80 * this.scale);
     this.ctx.fillRect((this.baseWidth - 30) * this.scale, this.paddleRightY, 20 * this.scale, 80 * this.scale);
+
+    // Handle countdown
+    if (this.isCountingDown) {
+      const elapsed = (timestamp - this.countdownStartTime) / 1000;
+      if (elapsed >= 1) {
+        this.countdown--;
+        this.countdownStartTime = timestamp;
+        if (this.countdown <= 0) {
+          this.isCountingDown = false;
+          this.resetGame();
+        }
+      }
+
+      // Draw countdown
+      this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+      this.ctx.fillStyle = "white";
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "middle";
+      this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+      this.ctx.shadowBlur = 10 * this.scale;
+      this.ctx.shadowOffsetX = 0;
+      this.ctx.shadowOffsetY = 0;
+      this.ctx.fillText(
+        this.countdown.toString(),
+        this.canvas.width / 2,
+        this.canvas.height / 2
+      );
+      this.ctx.shadowColor = "transparent";
+      this.ctx.shadowBlur = 0;
+    }
 
     // Update game state if not paused or over
     if (this.gameStarted && !this.isPaused && !this.gameOver) {

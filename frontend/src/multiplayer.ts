@@ -56,6 +56,7 @@ export class MultiplayerPongGame {
   public scale: number = 1;
   public lastTime: number = 0;
   public gameLoopRunning: boolean = false;
+  public animationFrameId: number | null = null;
 
   constructor(
     playerLeftName: string,
@@ -71,8 +72,8 @@ export class MultiplayerPongGame {
     settingsContainerId: string,
     statsManager: StatsManager,
     userName: string | null,
-    onGameEnd?: (winnerName: string) => void,
-    navigate?: (path: string) => void
+    navigate?: (path: string) => void,
+    onGameEnd?: (winnerName: string) => void
   ) {
     this.playerLeftName = playerLeftName;
     this.playerRightName = playerRightName;
@@ -88,24 +89,130 @@ export class MultiplayerPongGame {
     this.settingsContainer = document.getElementById(settingsContainerId) as HTMLDivElement;
     this.statsManager = statsManager;
     this.userName = userName;
-    this.onGameEnd = onGameEnd;
     this.navigate = navigate || (() => {});
+    this.onGameEnd = onGameEnd;
     // Set initial ball speed using base values and speed multiplier
     const speedMultiplier = this.getSpeedMultiplier();
     this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
     this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
     // Ensure Back button is always visible
     const backButton = document.getElementById("backButton") as HTMLButtonElement;
-    if (backButton) backButton.style.display = "block";
+    if (backButton) {
+      backButton.style.display = "block";
+      backButton.onclick = () => {
+        // Send cleanup message to both players
+        if (this.ws) {
+          this.ws.send(JSON.stringify({ type: "cleanup", reason: "opponent_left" }));
+        }
+        if (this.ws) {
+          this.ws.close();
+        }
+        this.cleanup();
+        this.navigate("/");
+      };
+    }
     // Multiplayer-specific setup (WebSocket, etc.) will be added here
   }
 
-  // Placeholder for multiplayer-specific setup
+  public handleWebSocketMessage(data: any): void {
+    switch (data.type) {
+      case "opponent":
+        // Update opponent name when they join
+        if (this.isHost) {
+          this.playerRightName = data.name;
+        } else {
+          this.playerLeftName = data.name;
+        }
+        // Update both DOM elements for robustness
+        const rightNameElem = document.getElementById("playerRightNameDisplay");
+        if (rightNameElem) rightNameElem.textContent = this.playerRightName;
+        const leftNameElem = document.getElementById("playerLeftNameDisplay");
+        if (leftNameElem) leftNameElem.textContent = this.playerLeftName;
+        break;
+      case "game_start":
+        this.gameStarted = true;
+        this.isPaused = false;
+        this.gameOver = false;
+        this.scoreLeft = 0;
+        this.scoreRight = 0;
+        this.scoreLeftElement.textContent = "0";
+        this.scoreRightElement.textContent = "0";
+        this.paddleLeftY = 160;
+        this.paddleRightY = 160;
+        this.ballX = 400;
+        this.ballY = 200;
+        this.ballSpeedX = 6.0;
+        this.ballSpeedY = 4.1;
+        this.restartButton.style.display = "none";
+        this.pollForGameStart();
+        break;
+      case "paddle":
+        this.handlePaddleMessage(data);
+        break;
+      case "state":
+        this.handleStateMessage(data);
+        break;
+      case "gameOver":
+        this.handleGameOver(data.winnerName);
+        break;
+      case "cleanup":
+        if (data.reason === "opponent_left") {
+          alert("The other player has left the game. You have been redirected to the welcome page.");
+        }
+        // Only close the WebSocket, do not call cleanup or navigate
+        if (this.ws) {
+          this.ws.close();
+        }
+        break;
+    }
+  }
+
   public setupWebSocket(ws: WebSocket, isHost: boolean, opponentName: string) {
     this.ws = ws;
     this.isHost = isHost;
     this.opponentName = opponentName;
-    // No ws.onmessage assignment here! All message handling is done in index.ts
+
+    // Update player names in the UI
+    if (isHost) {
+      this.playerLeftName = this.userName || "";
+      const leftNameElem = document.getElementById("playerLeftNameDisplay");
+      if (leftNameElem) leftNameElem.textContent = this.playerLeftName;
+      if (opponentName && opponentName !== "Waiting for opponent...") {
+        this.playerRightName = opponentName;
+        const rightNameElem = document.getElementById("playerRightNameDisplay");
+        if (rightNameElem) rightNameElem.textContent = opponentName;
+      }
+    } else {
+      this.playerRightName = this.userName || "";
+      const rightNameElem = document.getElementById("playerRightNameDisplay");
+      if (rightNameElem) rightNameElem.textContent = this.playerRightName;
+      if (opponentName && opponentName !== "Waiting for opponent...") {
+        this.playerLeftName = opponentName;
+        const leftNameElem = document.getElementById("playerLeftNameDisplay");
+        if (leftNameElem) leftNameElem.textContent = opponentName;
+      }
+    }
+
+    // Start/Restart button
+    this.restartButton.addEventListener("click", () => {
+      if (!this.gameStarted) {
+        this.localPlayerReady = true;
+        if (this.isHost) {
+          if (this.remotePlayerReady) {
+            this.ws?.send(JSON.stringify({ type: 'game_start' }));
+          } else {
+            this.ws?.send(JSON.stringify({ type: 'ready' }));
+            this.restartButton.disabled = true;
+            this.restartButton.textContent = "Waiting for opponent...";
+          }
+        } else {
+          this.ws?.send(JSON.stringify({ type: 'ready' }));
+          this.restartButton.disabled = true;
+          this.restartButton.textContent = "Waiting for opponent...";
+        }
+      }
+    });
+
     // Paddle input listeners (both host and guest)
     document.addEventListener("keydown", (e) => {
       if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
@@ -139,6 +246,35 @@ export class MultiplayerPongGame {
     });
   }
 
+  
+
+  private handleGameOver(winnerName: string): void {
+    this.gameOver = true;
+    this.ballSpeedX = 0;
+    this.ballSpeedY = 0;
+    this.restartButton.style.display = "none";
+    
+    // Only attempt to record match if we're the host and the WebSocket is still open
+    if (this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        const loserName = winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName;
+        this.statsManager.recordMatch(winnerName, loserName, "Online Pong", {
+          player1Score: this.scoreLeft,
+          player2Score: this.scoreRight,
+          sessionToken: localStorage.getItem("sessionToken")
+        });
+      } catch (error) {
+        console.error('[DEBUG] Match recording error:', error);
+      }
+    }
+    
+    // Call onGameEnd callback if it exists and hasn't been triggered yet
+    if (this.onGameEnd) {
+      this.hasTriggeredGameEnd = true;
+      this.onGameEnd(winnerName);
+    }
+  }
+
   // Host: handle paddle input from guest
   public handlePaddleMessage(msg: any) {
     if (this.isHost && msg.type === "paddle" && msg.key in this.keys) {
@@ -158,9 +294,9 @@ export class MultiplayerPongGame {
   public pollForGameStart() {
     const poll = () => {
       if (this.gameStarted && !this.gameLoopRunning) {
+        console.log('[DEBUG] Poll: gameStarted detected, game loop started');
         this.startGameLoop();
         this.gameLoopRunning = true;
-        console.log('[DEBUG] Poll: gameStarted detected, game loop started');
       } else {
         requestAnimationFrame(poll);
       }
@@ -170,10 +306,8 @@ export class MultiplayerPongGame {
 
   // Host: runs the game loop and sends state to guest
   public startGameLoop() {
-    this.gameLoopRunning = true;
     const loop = (timestamp: number) => {
-      if (!this.gameStarted || this.gameOver) {
-        this.gameLoopRunning = false;
+      if (!this.gameStarted) {
         return;
       }
       this.updateGameState(timestamp);
@@ -192,7 +326,7 @@ export class MultiplayerPongGame {
             scoreLeft: this.scoreLeft,
             scoreRight: this.scoreRight,
             gameOver: this.gameOver,
-            gameStarted: this.gameStarted,
+            gameStarted: this.gameStarted
           }
         }));
       }
@@ -252,20 +386,11 @@ export class MultiplayerPongGame {
     }
     // Game over
     if (this.scoreLeft >= 3 || this.scoreRight >= 3) {
-      this.gameOver = true;
-      if (!this.hasTriggeredGameEnd) {
-        this.hasTriggeredGameEnd = true;
-        const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
-        const loserName = this.scoreLeft >= 3 ? this.playerRightName : this.playerLeftName;
-        const winnerScore = this.scoreLeft >= 3 ? this.scoreLeft : this.scoreRight;
-        const loserScore = this.scoreLeft >= 3 ? this.scoreRight : this.scoreLeft;
-        
-        this.recordMatch(winnerName, loserName, winnerScore, loserScore);
-        
-        if (this.onGameEnd) {
-          this.onGameEnd(winnerName);
-        }
+      const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'gameOver', winnerName }));
       }
+      this.handleGameOver(winnerName);
     }
   }
 
@@ -296,86 +421,55 @@ export class MultiplayerPongGame {
     this.scoreRightElement.textContent = this.scoreRight.toString();
     // Game over message
     if (this.gameOver) {
-      this.ctx.font = `bold 50px 'Verdana', sans-serif`;
+      this.ctx.font = `bold ${50 * this.scale}px 'Verdana', sans-serif`;
       this.ctx.fillStyle = "white";
       this.ctx.textAlign = "center";
       this.ctx.textBaseline = "middle";
+      this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+      this.ctx.shadowBlur = 10 * this.scale;
       this.ctx.fillText(
         this.scoreLeft >= 3 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
-        this.baseWidth / 2,
-        this.baseHeight / 2
+        this.canvas.width / 2,
+        this.canvas.height / 2
       );
+      this.ctx.shadowColor = "transparent";
+      this.ctx.shadowBlur = 0;
     }
   }
 
   // Attaches a back button listener to handle navigation
   public attachBackButtonListener(): void {
-    const backButton = document.getElementById('backButton');
+    const backButton = document.getElementById("backButton") as HTMLButtonElement;
     if (backButton) {
-      backButton.addEventListener('click', () => {
+      backButton.style.display = "block";
+      backButton.onclick = () => {
         // Send cleanup message to both players
         if (this.ws) {
-          this.ws.send(JSON.stringify({ type: "cleanup" }));
+          this.ws.send(JSON.stringify({ type: "cleanup", reason: "opponent_left" }));
         }
         if (this.ws) {
           this.ws.close();
         }
         this.cleanup();
-        this.navigate('/');
-      });
+        this.navigate("/");
+      };
     }
   }
 
   public cleanup(): void {
-    // Call matchmaking leave endpoint
-    const sessionToken = localStorage.getItem("sessionToken");
-    if (sessionToken) {
-      fetch("http://localhost:4000/matchmaking/leave", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${sessionToken}` },
-      }).catch(error => console.error("Error leaving matchmaking:", error));
+    // Send cleanup message to both players
+    if (this.ws) {
+      this.ws.send(JSON.stringify({ type: "cleanup" }));
     }
-
-    // Remove event listeners
-    document.removeEventListener("keydown", (e) => {
-      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
-        if (!this.isHost && this.ws) {
-          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
-        }
-      }
-    });
-    document.removeEventListener("keyup", (e) => {
-      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
-        if (!this.isHost && this.ws) {
-          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
-        }
-      }
-    });
-
-    // Stop the game loop if it's running
-    this.gameLoopRunning = false;
-    this.gameStarted = false;
-    this.gameOver = true;
-
-    // Reset game state
-    this.paddleLeftY = 160;
-    this.paddleRightY = 160;
-    this.ballX = 400;
-    this.ballY = 200;
-    this.ballSpeedX = 6.0;
-    this.ballSpeedY = 4.1;
-    this.scoreLeft = 0;
-    this.scoreRight = 0;
-    this.hasTriggeredGameEnd = false;
-
-    // Clear the canvas
-    if (this.ctx) {
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    }
-
-    // Close WebSocket if it's open
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.ws) {
       this.ws.close();
+    }
+    window.removeEventListener("resize", () => this.resizeCanvas());
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+    if (this.gameLoopRunning) {
+      this.gameLoopRunning = false;
     }
   }
 
@@ -395,4 +489,25 @@ export class MultiplayerPongGame {
       console.error('[DEBUG] Match recording error:', error);
     }
   }
-} 
+
+  private resizeCanvas(): void {
+    const maxWidth = window.innerWidth * 0.9;
+    const maxHeight = window.innerHeight * 0.9;
+    const aspectRatio = this.baseWidth / this.baseHeight;
+
+    let newWidth = Math.min(maxWidth, this.baseWidth);
+    let newHeight = newWidth / aspectRatio;
+
+    if (newHeight > maxHeight) {
+      newHeight = maxHeight;
+      newWidth = newHeight * aspectRatio;
+    }
+
+    this.scale = newWidth / this.baseWidth;
+    this.canvas.width = newWidth;
+    this.canvas.height = newHeight;
+
+    this.canvas.style.display = "block";
+    this.canvas.style.margin = "auto";
+  }
+}

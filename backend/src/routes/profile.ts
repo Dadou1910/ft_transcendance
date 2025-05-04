@@ -179,8 +179,10 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
           throw new Error('Current password is incorrect');
         }
 
-        if (newPassword.length < 8) {
-          throw new Error('New password must be at least 8 characters long');
+        // Password requirements: at least 8 characters, one number, one special character
+        const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+          throw new Error('New password must be at least 8 characters, include a number and a special character.');
         }
 
         const hashedPassword = await hash(newPassword, fastify.config.BCRYPT_SALT_ROUNDS);

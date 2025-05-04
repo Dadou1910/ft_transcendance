@@ -92,6 +92,11 @@ export class SpaceBattle {
     ArrowRight: false,
   };
 
+  // Countdown state
+  private countdown: number = 0;
+  private countdownStartTime: number = 0;
+  private isCountingDown: boolean = false;
+
   constructor(
     playerLeftName: string,
     playerRightName: string,
@@ -265,21 +270,8 @@ export class SpaceBattle {
     // Start/Restart button
     this.restartButton.addEventListener("click", () => {
       if (!this.gameStarted) {
-        this.gameStarted = true;
-        this.isPaused = false;
-        this.gameOver = false;
-        this.scoreLeft = 0;
-        this.scoreRight = 0;
-        this.scoreLeftElement.textContent = "0";
-        this.scoreRightElement.textContent = "0";
-        this.targets = [];
-        this.projectiles = [];
-        this.targetSpawnTimer = 0;
-        this.leftShootTimer = 0;
-        this.rightShootTimer = 0;
-        this.restartButton.style.display = "none";
+        this.startCountdown();
       } else {
-        // Restart the game
         this.gameStarted = true;
         this.isPaused = false;
         this.gameOver = false;
@@ -465,6 +457,28 @@ export class SpaceBattle {
     }
   }
 
+  private startCountdown(): void {
+    this.countdown = 3;
+    this.countdownStartTime = performance.now();
+    this.isCountingDown = true;
+  }
+
+  private resetGame(): void {
+    this.gameStarted = true;
+    this.isPaused = false;
+    this.gameOver = false;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.scoreLeftElement.textContent = "0";
+    this.scoreRightElement.textContent = "0";
+    this.targets = [];
+    this.projectiles = [];
+    this.targetSpawnTimer = 0;
+    this.leftShootTimer = 0;
+    this.rightShootTimer = 0;
+    this.restartButton.style.display = "none";
+  }
+
   // Main draw loop
   private draw(timestamp: number = performance.now()): void {
     // Calculate delta time for smooth animation
@@ -472,6 +486,10 @@ export class SpaceBattle {
     this.lastTime = timestamp;
     const frameTime = 1 / 60;
     const deltaTimeFactor = deltaTime / frameTime;
+
+    // Update score display every frame
+    this.scoreLeftElement.textContent = this.scoreLeft.toString();
+    this.scoreRightElement.textContent = this.scoreRight.toString();
 
     // Clear canvas and draw background
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -481,8 +499,29 @@ export class SpaceBattle {
     this.drawTargets();
     this.drawProjectiles();
 
+    // Show countdown if active
+    if (this.isCountingDown) {
+      const elapsed = (timestamp - this.countdownStartTime) / 1000;
+      const remaining = Math.ceil(this.countdown - elapsed);
+      
+      if (remaining <= 0) {
+        this.isCountingDown = false;
+        this.resetGame();
+      } else {
+        this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+        this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+        this.ctx.shadowBlur = 10 * this.scale;
+        this.ctx.fillText(remaining.toString(), this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.shadowColor = "transparent";
+        this.ctx.shadowBlur = 0;
+      }
+    }
+
     // Show "Press Start" message if game hasn't started
-    if (!this.gameStarted && !this.gameOver) {
+    if (!this.gameStarted && !this.gameOver && !this.isCountingDown) {
       this.ctx.font = `bold ${30 * this.scale}px 'Verdana', sans-serif`;
       this.ctx.fillStyle = "white";
       this.ctx.textAlign = "center";
