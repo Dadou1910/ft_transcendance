@@ -1,5 +1,6 @@
 import { PongGame } from "./game.js";
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Defines interfaces for buildings and power-ups used in the game
 interface Building {
@@ -633,8 +634,6 @@ export class NeonCityPong extends PongGame {
           this.gameOver = true;
           this.powerUps = []; // Clear all power-ups
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -665,8 +664,6 @@ export class NeonCityPong extends PongGame {
           this.gameOver = true;
           this.powerUps = []; // Clear all power-ups
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -710,8 +707,9 @@ export class NeonCityPong extends PongGame {
       this.ctx.shadowBlur = 10 * this.scale;
       this.ctx.shadowOffsetX = 0;
       this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 3 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

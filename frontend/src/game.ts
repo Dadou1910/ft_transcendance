@@ -1,4 +1,5 @@
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Manages the core game logic for Pong Transcendence
 export class PongGame {
@@ -240,8 +241,6 @@ export class PongGame {
     this.scoreLeftElement.textContent = "0";
     this.scoreRightElement.textContent = "0";
     this.restartButton.style.display = "none";
-    const backButton = document.getElementById("backButton") as HTMLButtonElement;
-    if (backButton) backButton.style.display = "none";
   }
 
   // Reset the game state
@@ -375,8 +374,6 @@ export class PongGame {
         if (this.scoreRight >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           if (!this.isTournamentMode) { // Only record match if not in tournament mode
             this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Pong", {
               player1Score: this.scoreLeft,
@@ -402,8 +399,6 @@ export class PongGame {
         if (this.scoreLeft >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           
           if (!this.isTournamentMode) { // Only record match if not in tournament mode
             this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
@@ -444,8 +439,9 @@ export class PongGame {
       this.ctx.shadowBlur = 10 * this.scale;
       this.ctx.shadowOffsetX = 0;
       this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 3 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

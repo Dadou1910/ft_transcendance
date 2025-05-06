@@ -1,3 +1,4 @@
+import i18next from './i18n/config.js';
 import { MultiplayerSpaceBattle } from './multiplayerSpaceBattle.js';
 const uuidv4 = () => crypto.randomUUID();
 // Imports Router class for client-side routing
@@ -42,6 +43,8 @@ import { StatsManager, Player, GameStats, MatchRecord } from "./stats.js";
 import { SettingsView } from "./settings.js";
 // Imports MultiplayerPongGame class
 import { MultiplayerPongGame } from "./multiplayer.js";
+import './i18n/config.js';
+import { renderLanguageSwitcherWithHandler, setupLanguageSwitcherWithHandler } from './language.js';
 
 // Initializes StatsManager for tracking player stats
 const statsManager = new StatsManager();
@@ -51,6 +54,16 @@ let tournamentId = uuidv4();
 const tournament = new Tournament(statsManager, tournamentId);
 // Initializes Router with the app container ID and route listener setup
 const router = new Router("app", setupRouteListeners);
+
+// Initialize i18next and start the router
+import('./i18n/config.js').then(() => {
+  console.log("[i18n] Initialized");
+  router.start();
+}).catch(error => {
+  console.error("[i18n] Failed to initialize:", error);
+  router.start(); // Start router anyway to show error state
+});
+
 // Stores the current game instance (PongGame, NeonCityPong, AIPong, or SpaceBattle)
 let gameInstance: PongGame | SpaceBattle | null = null;
 (window as any).gameInstance = null;
@@ -66,6 +79,69 @@ export const API_BASE_URL = window.location.protocol === 'https:' ? 'https://loc
 
 // Defines navigate function to handle route changes
 const navigate = (path: string) => router.navigate(path);
+
+// --- Presence WebSocket connection ---
+let presenceSocket: WebSocket | null = null;
+let presenceReconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function connectPresenceWS() {
+  const sessionToken = localStorage.getItem("sessionToken");
+  if (!sessionToken) return;
+  
+  // Clear any existing reconnect timeout
+  if (presenceReconnectTimeout) {
+    clearTimeout(presenceReconnectTimeout);
+    presenceReconnectTimeout = null;
+  }
+
+  const presenceWsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
+  presenceSocket = new WebSocket(presenceWsUrl);
+
+  presenceSocket.onopen = () => {
+    console.log("[Presence WS] Connected");
+    // Send initial ping to establish connection
+    if (presenceSocket?.readyState === WebSocket.OPEN) {
+      presenceSocket.send(JSON.stringify({ type: 'ping' }));
+    }
+  };
+
+  presenceSocket.onclose = () => {
+    console.log("[Presence WS] Disconnected, attempting to reconnect...");
+    // Clear any existing reconnect timeout
+    if (presenceReconnectTimeout) {
+      clearTimeout(presenceReconnectTimeout);
+    }
+    // Try to reconnect after a short delay
+    presenceReconnectTimeout = setTimeout(connectPresenceWS, 2000);
+  };
+
+  presenceSocket.onerror = (error) => {
+    console.error("[Presence WS] Error:", error);
+    // Close and reconnect on error
+    if (presenceSocket) {
+      presenceSocket.close();
+    }
+  };
+
+  presenceSocket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'pong') {
+        // Connection is alive, do nothing
+        return;
+      }
+    } catch (error) {
+      console.error("[Presence WS] Error parsing message:", error);
+    }
+  };
+}
+
+// Call connectPresenceWS after login or on any authenticated page
+function ensurePresenceWS() {
+  if (!presenceSocket || presenceSocket.readyState === WebSocket.CLOSED) {
+    connectPresenceWS();
+  }
+}
 
 // Helper function to get current user from backend
 async function getCurrentUser(): Promise<{ id: number; username: string; email: string } | null> {
@@ -91,6 +167,8 @@ async function getCurrentUser(): Promise<{ id: number; username: string; email: 
     }
 
     const { user } = await response.json();
+    // Ensure presence WebSocket is connected
+    ensurePresenceWS();
     console.log("[GetUser Debug] User profile retrieved successfully:", { id: user.id, username: user.name });
     return { id: user.id, username: user.name, email: user.email };
   } catch (error) {
@@ -101,6 +179,7 @@ async function getCurrentUser(): Promise<{ id: number; username: string; email: 
 
 // Defines root route ("/")
 router.addRoute("/", async () => {
+  ensurePresenceWS();
   console.log("[Route Debug] Entering root route handler");
   const currentUser = await getCurrentUser();
   console.log("[Route Debug] getCurrentUser result:", currentUser ? "User found" : "No user found");
@@ -172,38 +251,21 @@ router.addRoute("/", async () => {
         },
         (path: string) => router.navigate(path)
       );
-      // --- Presence WebSocket connection ---
-      let presenceSocket: WebSocket | null = null;
-      function connectPresenceWS() {
-        const sessionToken = localStorage.getItem("sessionToken");
-        if (!sessionToken) return;
-        const presenceWsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
-        presenceSocket = new WebSocket(presenceWsUrl);
-        presenceSocket.onopen = () => {
-          // Optionally, send a ping or log
-          // console.log("Presence WebSocket connected");
-        };
-        presenceSocket.onclose = () => {
-          // Try to reconnect after a short delay
-          setTimeout(connectPresenceWS, 2000);
-        };
-        presenceSocket.onerror = () => {
-          // Close and reconnect on error
-          if (presenceSocket) presenceSocket.close();
-        };
-      }
-      connectPresenceWS();
-      // Optionally, close on logout or navigation
-      window.addEventListener("beforeunload", () => {
-        if (presenceSocket) presenceSocket.close();
-      });
     }, 0);
     return html;
   } else {
-    return renderWelcomePage(
+    console.log("[Route Debug] Rendering pre-login welcome page");
+    const html = renderWelcomePage(
       () => router.navigate("/register"),
       () => router.navigate("/login")
     );
+    setTimeout(() => {
+      setupWelcomePage(
+        () => router.navigate("/register"),
+        () => router.navigate("/login")
+      );
+    }, 0);
+    return html;
   }
 });
 
@@ -297,6 +359,12 @@ router.addRoute("/register", () => {
 
       // Store the session token
       localStorage.setItem("sessionToken", loginData.sessionToken);
+      // Ensure WebSocket connection is established before navigation
+      await new Promise<void>((resolve) => {
+        connectPresenceWS();
+        // Give a small delay to ensure connection is established
+        setTimeout(resolve, 100);
+      });
       console.log("[Registration Debug] Session token stored in localStorage");
 
       console.log("[Registration Debug] Registration process complete, navigating to home");
@@ -363,6 +431,12 @@ router.addRoute("/login", () => {
 
         console.log("[Login Debug] Storing session token in localStorage");
         localStorage.setItem("sessionToken", user.sessionToken);
+        // Ensure WebSocket connection is established before navigation
+        await new Promise<void>((resolve) => {
+          connectPresenceWS();
+          // Give a small delay to ensure connection is established
+          setTimeout(resolve, 100);
+        });
         console.log("[Login Debug] Session token stored for user:", user.email);
         
         console.log("[Login Debug] Attempting navigation to /");
@@ -754,6 +828,7 @@ router.addRoute("/multiplayer", () => {
 
 // Add settings route
 router.addRoute("/settings", () => {
+  ensurePresenceWS();
   const settingsView = new SettingsView(statsManager, navigate);
   const loadingContent = '<div class="settings-loading">Loading settings...</div>';
   
@@ -773,6 +848,7 @@ router.addRoute("/settings", () => {
 // Add profile route
 let profilePollingInterval: ReturnType<typeof setInterval> | null = null;
 router.addRoute("/profile", async () => {
+  ensurePresenceWS();
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     router.navigate("/login");
@@ -835,7 +911,8 @@ router.addRoute("/profile", async () => {
         playerStats,
         matchHistory,
         gameStats,
-        latestFriends
+        latestFriends,
+        true
       );
       const appContainer = document.getElementById("app");
       if (appContainer) {
@@ -846,13 +923,19 @@ router.addRoute("/profile", async () => {
               clearInterval(profilePollingInterval);
               profilePollingInterval = null;
             }
+            // Remove popstate listener
+            window.removeEventListener("popstate", cleanupPolling);
+            // Restore router.handleRouteChange
+            if (router.handleRouteChange === customHandleRouteChange) {
+              router.handleRouteChange = originalHandleRouteChange;
+            }
             router.navigate("/");
-          });
+          }, router.navigate);
         }, 0);
       }
     } catch (error) {
       console.error("Error fetching profile data:", error);
-      router.navigate("/welcome");
+      router.navigate("/");
     }
   }
 
@@ -864,24 +947,108 @@ router.addRoute("/profile", async () => {
   profilePollingInterval = setInterval(fetchAndRenderProfile, 5000);
 
   // Clean up polling when navigating away
-  const cleanupPolling = () => {
+  function cleanupPolling() {
     if (profilePollingInterval) {
       clearInterval(profilePollingInterval);
       profilePollingInterval = null;
     }
-  };
+    window.removeEventListener("popstate", cleanupPolling);
+    if (router.handleRouteChange === customHandleRouteChange) {
+      router.handleRouteChange = originalHandleRouteChange;
+    }
+  }
 
   // Clean up on popstate (browser back/forward)
   window.addEventListener("popstate", cleanupPolling);
 
   // Clean up on route change
   const originalHandleRouteChange = router.handleRouteChange;
-  router.handleRouteChange = async () => {
+  async function customHandleRouteChange() {
     cleanupPolling();
-    window.removeEventListener("popstate", cleanupPolling);
     await originalHandleRouteChange.call(router);
-  };
+  }
+  router.handleRouteChange = customHandleRouteChange;
 
+  return latestHtml;
+});
+
+// Add dynamic profile route for viewing other users' profiles
+router.addRoute("/profile/:id", async () => {
+  ensurePresenceWS();
+  const sessionToken = localStorage.getItem("sessionToken");
+  const pathParts = window.location.pathname.split("/");
+  const userId = pathParts[pathParts.length - 1];
+  if (!userId) {
+    router.navigate("/profile");
+    return "";
+  }
+
+  let latestHtml = "";
+  let playerStats: any = {};
+  let matchHistory: any[] = [];
+  let gameStats: Record<string, any> = {};
+  let latestFriends: any[] = [];
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile/${userId}`, {
+      headers: { "Authorization": `Bearer ${sessionToken}` }
+    });
+    if (!response.ok) throw new Error("Failed to fetch user profile");
+    const { user, matches, friends } = await response.json();
+    latestFriends = friends || [];
+    playerStats = {
+      wins: user.wins || 0,
+      losses: user.losses || 0,
+      tournamentsWon: user.tournamentsWon || 0,
+    };
+    gameStats = {};
+    matches.forEach((match: any) => {
+      const { gameType, userName, opponentName, userScore, opponentScore } = match;
+      if (!gameStats[gameType]) {
+        gameStats[gameType] = {
+          username: user.name,
+          gameType,
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0
+        };
+      }
+      gameStats[gameType].gamesPlayed++;
+      if (userName === user.name && userScore > opponentScore) {
+        gameStats[gameType].wins++;
+      } else if (opponentName === user.name && opponentScore > userScore) {
+        gameStats[gameType].wins++;
+      } else {
+        gameStats[gameType].losses++;
+      }
+    });
+    matchHistory = matches.map((match: any) => ({
+      winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
+      loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
+      timestamp: match.date
+    }));
+    latestHtml = renderProfilePage(
+      user.name,
+      user.email,
+      playerStats,
+      matchHistory,
+      gameStats,
+      latestFriends,
+      false
+    );
+    const appContainer = document.getElementById("app");
+    if (appContainer) {
+      appContainer.innerHTML = latestHtml;
+      setTimeout(() => {
+        setupProfilePage(() => {
+          router.navigate("/");
+        }, router.navigate);
+      }, 0);
+    }
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    router.navigate("/welcome");
+  }
   return latestHtml;
 });
 
@@ -979,7 +1146,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       }
       if (data.type === "cleanup") {
         if (data.reason === "opponent_left") {
-          alert("The other player has left the game. You have been redirected to the welcome page.");
+          alert(i18next.t('game.opponentLeft'));
         }
         if (multiplayerGame) {
           multiplayerGame.cleanup();
@@ -1018,7 +1185,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       if (!assigned && data.type === "assign") {
         isHost = data.host;
         assigned = true;
-        opponentName = data.opponentName || "Waiting for opponent...";
+        opponentName = data.opponentName || i18next.t('game.waitingForOpponent');
         
         // Initialize the game for both host and guest
         if (!multiplayerGame) {
@@ -1064,7 +1231,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
             multiplayerGame.pollForGameStart();
           }
           multiplayerGame.restartButton.style.display = "block";
-          multiplayerGame.restartButton.textContent = "Start";
+          multiplayerGame.restartButton.textContent = i18next.t('game.start');
           multiplayerGame.restartButton.disabled = false;
           multiplayerGame.restartButton.onclick = startGame;
           if (!isHost && multiplayerGameType !== "spaceBattle") {
@@ -1106,7 +1273,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
           multiplayerGame.playerLeftName = currentUser.username;
           const leftNameElem = document.getElementById("playerLeftNameDisplay");
           if (leftNameElem) leftNameElem.textContent = currentUser.username;
-          if (opponentName && opponentName !== "Waiting for opponent...") {
+          if (opponentName && opponentName !== i18next.t('game.waitingForOpponent')) {
             multiplayerGame.playerRightName = opponentName;
             const rightNameElem = document.getElementById("playerRightNameDisplay");
             if (rightNameElem) rightNameElem.textContent = opponentName;
@@ -1115,7 +1282,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
           multiplayerGame.playerRightName = currentUser.username;
           const rightNameElem = document.getElementById("playerRightNameDisplay");
           if (rightNameElem) rightNameElem.textContent = currentUser.username;
-          if (opponentName && opponentName !== "Waiting for opponent...") {
+          if (opponentName && opponentName !== i18next.t('game.waitingForOpponent')) {
             multiplayerGame.playerLeftName = opponentName;
             const leftNameElem = document.getElementById("playerLeftNameDisplay");
             if (leftNameElem) leftNameElem.textContent = opponentName;
@@ -1127,14 +1294,13 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
         // Always update both name displays for robustness
         if (multiplayerGame.isHost) {
           multiplayerGame.playerRightName = data.name;
+          const rightNameElem = document.getElementById("playerRightNameDisplay");
+          if (rightNameElem) rightNameElem.textContent = data.name;
         } else {
           multiplayerGame.playerLeftName = data.name;
-        }
-        // Always update both DOM elements
-        const rightNameElem = document.getElementById("playerRightNameDisplay");
-        if (rightNameElem) rightNameElem.textContent = multiplayerGame.playerRightName;
           const leftNameElem = document.getElementById("playerLeftNameDisplay");
-        if (leftNameElem) leftNameElem.textContent = multiplayerGame.playerLeftName;
+          if (leftNameElem) leftNameElem.textContent = data.name;
+        }
         console.log('[DEBUG] Multiplayer game opponent joined and name updated');
       }
       // Handle paddle and state messages for multiplayer
@@ -1175,7 +1341,7 @@ function setupRouteListeners() {
     const playMatchButton = document.getElementById("playMatchButton");
     const playTournamentButton = document.getElementById("playTournamentButton");
     const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
-    const toggleSidebarButton = document.getElementById("toggleSidebarButton");
+    const menuButton = document.getElementById("menuButton");
     const sidebar = document.getElementById("sidebar");
 
     // Setup pre-login buttons
@@ -1254,8 +1420,8 @@ function setupRouteListeners() {
       });
     }
 
-    if (toggleSidebarButton && sidebar) {
-      toggleSidebarButton.addEventListener("click", () => {
+    if (menuButton && sidebar) {
+      menuButton.addEventListener("click", () => {
         sidebar.classList.toggle("visible");
       });
 
@@ -1264,7 +1430,7 @@ function setupRouteListeners() {
         if (
           sidebar.classList.contains("visible") &&
           !sidebar.contains(target) &&
-          !toggleSidebarButton.contains(target)
+          !menuButton.contains(target)
         ) {
           sidebar.classList.remove("visible");
         }
@@ -1342,6 +1508,12 @@ function setupRouteListeners() {
 
         // Store the session token
         localStorage.setItem("sessionToken", loginData.sessionToken);
+        // Ensure WebSocket connection is established before navigation
+        await new Promise<void>((resolve) => {
+          connectPresenceWS();
+          // Give a small delay to ensure connection is established
+          setTimeout(resolve, 100);
+        });
         console.log("[Registration Debug] Session token stored in localStorage");
 
         console.log("[Registration Debug] Registration process complete, navigating to home");
@@ -1377,6 +1549,12 @@ function setupRouteListeners() {
             return;
           }
           localStorage.setItem("sessionToken", user.sessionToken);
+          // Ensure WebSocket connection is established before navigation
+          await new Promise<void>((resolve) => {
+            connectPresenceWS();
+            // Give a small delay to ensure connection is established
+            setTimeout(resolve, 100);
+          });
           console.log("Session token set for user:", user.email);
           console.log("Attempting navigation to / from setup");
           router.navigate("/");
@@ -1494,3 +1672,33 @@ async function handleLogin(email: string, password: string) {
     }
   }
 }
+
+// After DOMContentLoaded, render the global language switcher
+window.addEventListener('DOMContentLoaded', () => {
+  const langDiv = document.getElementById('globalLanguageSwitcher');
+  if (langDiv) {
+    langDiv.innerHTML = renderLanguageSwitcherWithHandler(() => {
+      // Reload the current route
+      router.navigate(window.location.pathname);
+    });
+    setupLanguageSwitcherWithHandler(() => {
+      router.navigate(window.location.pathname);
+    });
+  }
+});
+
+// Add beforeunload handler to close presenceSocket
+window.addEventListener("beforeunload", () => {
+  if (presenceSocket) {
+    presenceSocket.close();
+    presenceSocket = null;
+  }
+  if (presenceReconnectTimeout) {
+    clearTimeout(presenceReconnectTimeout);
+    presenceReconnectTimeout = null;
+  }
+});
+
+// On logout, close presenceSocket
+// In all logout callbacks, add:
+// if (presenceSocket) presenceSocket.close();

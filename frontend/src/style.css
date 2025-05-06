@@ -359,70 +359,6 @@ body {
   font-size: clamp(14px, 1.5vw, 16px);
 }
 
-.toggle-button {
-  background-color: #47d2fc;
-  color: white;
-  padding: 0.5rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: fixed;
-  top: 1rem;
-  left: 1rem;
-  z-index: 50;
-  width: 48px;
-  height: 32px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.toggle-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 6px rgba(71, 210, 252, 0.25);
-}
-
-/* Desktop/large screens */
-@media (min-width: 768px) {
-  .toggle-button {
-    display: none !important;
-  }
-  
-  .sidebar {
-    transform: none;
-  }
-}
-
-/* Mobile/small screens OR short height */
-@media (max-width: 767px), (max-height: 400px) {
-  .toggle-button {
-    display: flex !important;
-  }
-  
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  
-  .sidebar.visible {
-    transform: translateX(0);
-  }
-}
-
-/* Ensure minimum spacing in very small screens */
-@media (max-height: 400px) {
-  .avatar {
-    margin-bottom: 1rem;
-  }
-  
-  .sidebar-links {
-    margin-top: 1rem;
-  }
-}
-
 /* Main content styles */
 .main-content {
   @apply flex-1 p-8 flex flex-col items-center justify-center bg-black bg-opacity-90;
@@ -1438,4 +1374,60 @@ body {
   background-color: rgba(244, 194, 194, 0.2);
   box-shadow: 0 0 15px rgba(244, 194, 194, 0.3);
   transform: translateY(-2px);
+}
+
+.language-switcher {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+}
+
+.language-select {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 1px solid #f4c2c2;
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.language-select:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+  border-color: #d8a8b5;
+}
+
+.language-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(244, 194, 194, 0.3);
+}
+
+#backButton {
+  display: inline-block !important;
+}
+
+/* Menu button styles */
+.menu-button {
+  @apply fixed top-4 left-4 z-50 p-2 rounded-md bg-black bg-opacity-80 border-2 border-[#f4c2c2] text-[#f4c2c2] cursor-pointer transition-all duration-300;
+  display: none;
+}
+
+.menu-button:hover {
+  @apply bg-[#f4c2c2] text-black;
+}
+
+@media (max-width: 767px), (max-height: 500px) {
+  .menu-button {
+    display: block;
+  }
+  
+  .sidebar {
+    @apply fixed top-0 left-0 h-full w-64 bg-black bg-opacity-90 transform -translate-x-full transition-transform duration-300 z-40;
+  }
+  
+  .sidebar.visible {
+    @apply translate-x-0;
+  }
 }

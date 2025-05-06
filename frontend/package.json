@@ -8,7 +8,10 @@
     "copy:html": "cp ./index.html dist/index.html",
     "build": "npm run build:css && npm run build:ts && npm run copy:assets && npm run copy:html"
   },
-  "dependencies": {},
+  "dependencies": {
+    "i18next": "^23.7.11",
+    "i18next-browser-languagedetector": "^7.2.0"
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31",

@@ -1,5 +1,6 @@
 import { NeonCityPong } from "./neonCityPong.js";
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Extends the base PongGame to include an AI-controlled right paddle
 export class AIPong extends NeonCityPong {
@@ -248,8 +249,6 @@ export class AIPong extends NeonCityPong {
         if (this.scoreRight >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "AI Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -267,8 +266,6 @@ export class AIPong extends NeonCityPong {
         if (this.scoreLeft >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "AI Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -304,8 +301,9 @@ export class AIPong extends NeonCityPong {
       this.ctx.shadowBlur = 10 * this.scale;
       this.ctx.shadowOffsetX = 0;
       this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 3 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

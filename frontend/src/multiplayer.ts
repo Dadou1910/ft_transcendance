@@ -1,4 +1,5 @@
 import { StatsManager } from "./stats.js";
+import i18next from './i18n/config.js';
 
 // Multiplayer Pong Game class (WebSocket-based)
 export class MultiplayerPongGame {
@@ -120,14 +121,13 @@ export class MultiplayerPongGame {
         // Update opponent name when they join
         if (this.isHost) {
           this.playerRightName = data.name;
+          const rightNameElem = document.getElementById("playerRightNameDisplay");
+          if (rightNameElem) rightNameElem.textContent = data.name;
         } else {
           this.playerLeftName = data.name;
+          const leftNameElem = document.getElementById("playerLeftNameDisplay");
+          if (leftNameElem) leftNameElem.textContent = data.name;
         }
-        // Update both DOM elements for robustness
-        const rightNameElem = document.getElementById("playerRightNameDisplay");
-        if (rightNameElem) rightNameElem.textContent = this.playerRightName;
-        const leftNameElem = document.getElementById("playerLeftNameDisplay");
-        if (leftNameElem) leftNameElem.textContent = this.playerLeftName;
         break;
       case "game_start":
         this.gameStarted = true;
@@ -157,7 +157,7 @@ export class MultiplayerPongGame {
         break;
       case "cleanup":
         if (data.reason === "opponent_left") {
-          alert("The other player has left the game. You have been redirected to the welcome page.");
+          alert(i18next.t('game.opponentLeft'));
         }
         // Only close the WebSocket, do not call cleanup or navigate
         if (this.ws) {
@@ -177,7 +177,7 @@ export class MultiplayerPongGame {
       this.playerLeftName = this.userName || "";
       const leftNameElem = document.getElementById("playerLeftNameDisplay");
       if (leftNameElem) leftNameElem.textContent = this.playerLeftName;
-      if (opponentName && opponentName !== "Waiting for opponent...") {
+      if (opponentName && opponentName !== i18next.t('game.waitingForOpponent')) {
         this.playerRightName = opponentName;
         const rightNameElem = document.getElementById("playerRightNameDisplay");
         if (rightNameElem) rightNameElem.textContent = opponentName;
@@ -186,7 +186,7 @@ export class MultiplayerPongGame {
       this.playerRightName = this.userName || "";
       const rightNameElem = document.getElementById("playerRightNameDisplay");
       if (rightNameElem) rightNameElem.textContent = this.playerRightName;
-      if (opponentName && opponentName !== "Waiting for opponent...") {
+      if (opponentName && opponentName !== i18next.t('game.waitingForOpponent')) {
         this.playerLeftName = opponentName;
         const leftNameElem = document.getElementById("playerLeftNameDisplay");
         if (leftNameElem) leftNameElem.textContent = opponentName;
@@ -203,12 +203,12 @@ export class MultiplayerPongGame {
           } else {
             this.ws?.send(JSON.stringify({ type: 'ready' }));
             this.restartButton.disabled = true;
-            this.restartButton.textContent = "Waiting for opponent...";
+            this.restartButton.textContent = i18next.t('game.waitingForOpponent');
           }
         } else {
           this.ws?.send(JSON.stringify({ type: 'ready' }));
           this.restartButton.disabled = true;
-          this.restartButton.textContent = "Waiting for opponent...";
+          this.restartButton.textContent = i18next.t('game.waitingForOpponent');
         }
       }
     });

@@ -1,4 +1,5 @@
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Interfaces for game objects
 interface Star {
@@ -445,8 +446,6 @@ export class SpaceBattle {
     this.targets = [];
     this.projectiles = [];
     this.restartButton.style.display = "block";
-    const backButton = document.getElementById("backButton") as HTMLButtonElement;
-    if (backButton) backButton.style.display = "block";
     this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Space Battle", {
         player1Score: this.scoreLeft,
         player2Score: this.scoreRight,
@@ -514,6 +513,8 @@ export class SpaceBattle {
         this.ctx.textBaseline = "middle";
         this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
         this.ctx.shadowBlur = 10 * this.scale;
+        this.ctx.shadowOffsetX = 0;
+        this.ctx.shadowOffsetY = 0;
         this.ctx.fillText(remaining.toString(), this.canvas.width / 2, this.canvas.height / 2);
         this.ctx.shadowColor = "transparent";
         this.ctx.shadowBlur = 0;
@@ -599,8 +600,11 @@ export class SpaceBattle {
       this.ctx.textBaseline = "middle";
       this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
       this.ctx.shadowBlur = 10 * this.scale;
+      this.ctx.shadowOffsetX = 0;
+      this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 10 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 10 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

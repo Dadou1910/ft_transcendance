@@ -46,14 +46,36 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
         });
       });
 
+      // Fetch friends for the viewed user (with online status)
+      const friends = await new Promise<{ id: number, name: string }[]>((resolve, reject) => {
+        db.all(
+          `SELECT users.id, users.name FROM friends 
+           JOIN users ON friends.friendId = users.id 
+           WHERE friends.userId = ?`,
+          [user.id],
+          (err: Error | null, rows: unknown[] | undefined) => {
+            if (err) return reject(err);
+            resolve((rows as { id: number, name: string }[]) || []);
+          }
+        );
+      });
+      const friendsWithStatus = friends.map(friend => ({
+        ...friend,
+        online: isUserOnline(friend.id)
+      }));
+
       return {
         user: {
           id: user.id,
           name: user.name,
           email: user.email,
+          wins: user.wins,
+          losses: user.losses,
+          tournamentsWon: user.tournamentsWon
         },
         matches,
         settings: settings || {},
+        friends: friendsWithStatus,
       };
     } catch (err) {
       fastify.log.error('Profile fetch error:', err);
