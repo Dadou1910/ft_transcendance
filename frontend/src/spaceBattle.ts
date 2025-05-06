@@ -1,4 +1,5 @@
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Interfaces for game objects
 interface Star {
@@ -91,6 +92,11 @@ export class SpaceBattle {
     ArrowLeft: false,
     ArrowRight: false,
   };
+
+  // Countdown state
+  private countdown: number = 0;
+  private countdownStartTime: number = 0;
+  private isCountingDown: boolean = false;
 
   constructor(
     playerLeftName: string,
@@ -265,21 +271,8 @@ export class SpaceBattle {
     // Start/Restart button
     this.restartButton.addEventListener("click", () => {
       if (!this.gameStarted) {
-        this.gameStarted = true;
-        this.isPaused = false;
-        this.gameOver = false;
-        this.scoreLeft = 0;
-        this.scoreRight = 0;
-        this.scoreLeftElement.textContent = "0";
-        this.scoreRightElement.textContent = "0";
-        this.targets = [];
-        this.projectiles = [];
-        this.targetSpawnTimer = 0;
-        this.leftShootTimer = 0;
-        this.rightShootTimer = 0;
-        this.restartButton.style.display = "none";
+        this.startCountdown();
       } else {
-        // Restart the game
         this.gameStarted = true;
         this.isPaused = false;
         this.gameOver = false;
@@ -453,16 +446,36 @@ export class SpaceBattle {
     this.targets = [];
     this.projectiles = [];
     this.restartButton.style.display = "block";
-    const backButton = document.getElementById("backButton") as HTMLButtonElement;
-    if (backButton) backButton.style.display = "block";
     this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Space Battle", {
         player1Score: this.scoreLeft,
         player2Score: this.scoreRight,
-        sessionToken: localStorage.getItem("sessionToken") // Add sessionToken
+        sessionToken: localStorage.getItem("sessionToken")
       });
     if (this.onGameEnd) {
       this.onGameEnd(winnerName);
     }
+  }
+
+  private startCountdown(): void {
+    this.countdown = 3;
+    this.countdownStartTime = performance.now();
+    this.isCountingDown = true;
+  }
+
+  private resetGame(): void {
+    this.gameStarted = true;
+    this.isPaused = false;
+    this.gameOver = false;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.scoreLeftElement.textContent = "0";
+    this.scoreRightElement.textContent = "0";
+    this.targets = [];
+    this.projectiles = [];
+    this.targetSpawnTimer = 0;
+    this.leftShootTimer = 0;
+    this.rightShootTimer = 0;
+    this.restartButton.style.display = "none";
   }
 
   // Main draw loop
@@ -473,6 +486,10 @@ export class SpaceBattle {
     const frameTime = 1 / 60;
     const deltaTimeFactor = deltaTime / frameTime;
 
+    // Update score display every frame
+    this.scoreLeftElement.textContent = this.scoreLeft.toString();
+    this.scoreRightElement.textContent = this.scoreRight.toString();
+
     // Clear canvas and draw background
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawBackground();
@@ -481,8 +498,31 @@ export class SpaceBattle {
     this.drawTargets();
     this.drawProjectiles();
 
+    // Show countdown if active
+    if (this.isCountingDown) {
+      const elapsed = (timestamp - this.countdownStartTime) / 1000;
+      const remaining = Math.ceil(this.countdown - elapsed);
+      
+      if (remaining <= 0) {
+        this.isCountingDown = false;
+        this.resetGame();
+      } else {
+        this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+        this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+        this.ctx.shadowBlur = 10 * this.scale;
+        this.ctx.shadowOffsetX = 0;
+        this.ctx.shadowOffsetY = 0;
+        this.ctx.fillText(remaining.toString(), this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.shadowColor = "transparent";
+        this.ctx.shadowBlur = 0;
+      }
+    }
+
     // Show "Press Start" message if game hasn't started
-    if (!this.gameStarted && !this.gameOver) {
+    if (!this.gameStarted && !this.gameOver && !this.isCountingDown) {
       this.ctx.font = `bold ${30 * this.scale}px 'Verdana', sans-serif`;
       this.ctx.fillStyle = "white";
       this.ctx.textAlign = "center";
@@ -560,8 +600,11 @@ export class SpaceBattle {
       this.ctx.textBaseline = "middle";
       this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
       this.ctx.shadowBlur = 10 * this.scale;
+      this.ctx.shadowOffsetX = 0;
+      this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 10 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 10 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

@@ -12,8 +12,16 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
     }
   }>('/match', async (request, reply) => {
     const { userName, opponentName, userScore, opponentScore, gameType } = request.body;
+    const user = request.user;
 
-    fastify.log.info('Received /match request:', { userName, opponentName, userScore, opponentScore, gameType });
+    fastify.log.info('Received /match request:', { 
+      userName, 
+      opponentName, 
+      userScore, 
+      opponentScore, 
+      gameType,
+      authenticatedUser: user ? { id: user.id, name: user.name } : null
+    });
 
     // Validate required fields
     if (!userName || !opponentName || userScore === undefined || opponentScore === undefined || !gameType) {
@@ -23,7 +31,7 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
     }
 
     // Validate gameType
-    const validGameTypes = ['Pong', 'Neon City Pong', 'AI Pong', 'Space Battle'];
+    const validGameTypes = ['Pong', 'Neon City Pong', 'AI Pong', 'Space Battle', 'Online Pong', 'Online Space Battle'];
     if (!validGameTypes.includes(gameType)) {
       fastify.log.warn('Validation failed: Invalid gameType:', gameType);
       reply.code(400);
@@ -31,7 +39,6 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
     }
 
     try {
-      const user = request.user;
       let userId: number | undefined = undefined;
       let opponentId: number | undefined = undefined;
 

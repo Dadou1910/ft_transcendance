@@ -4,7 +4,8 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "80:80"
+      - "443:443"   # HTTPS
+      - "80:80"     # HTTP (for redirect to HTTPS)
     networks:
       - app-network
     restart: unless-stopped
@@ -23,6 +24,13 @@ services:
       - BCRYPT_SALT_ROUNDS=10
     # volumes:
     #   - /goinfre:/goinfre # Uncomment this at school to map /goinfre or /sgoinfre as required by the subject (Page 6)
+    restart: unless-stopped
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
     restart: unless-stopped
 networks:
   app-network:

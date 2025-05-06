@@ -1,3 +1,5 @@
+import i18next from './i18n/config.js';
+import { MultiplayerSpaceBattle } from './multiplayerSpaceBattle.js';
 const uuidv4 = () => crypto.randomUUID();
 // Imports Router class for client-side routing
 import { Router } from "./router.js";
@@ -18,6 +20,10 @@ import {
   setupTournamentEnd,
   renderProfilePage,
   setupProfilePage,
+  renderMultiplayerMenu,
+  setupMultiplayerMenu,
+  renderWaitingForOpponent,
+  setupWaitingForOpponent,
 } from "./ui.js";
 // Imports Tournament class for managing tournament logic
 import { Tournament } from "./tournament.js";
@@ -35,6 +41,10 @@ import { Bracket } from "./bracket.js";
 import { StatsManager, Player, GameStats, MatchRecord } from "./stats.js";
 // Imports SettingsView class
 import { SettingsView } from "./settings.js";
+// Imports MultiplayerPongGame class
+import { MultiplayerPongGame } from "./multiplayer.js";
+import './i18n/config.js';
+import { renderLanguageSwitcherWithHandler, setupLanguageSwitcherWithHandler } from './language.js';
 
 // Initializes StatsManager for tracking player stats
 const statsManager = new StatsManager();
@@ -44,8 +54,19 @@ let tournamentId = uuidv4();
 const tournament = new Tournament(statsManager, tournamentId);
 // Initializes Router with the app container ID and route listener setup
 const router = new Router("app", setupRouteListeners);
+
+// Initialize i18next and start the router
+import('./i18n/config.js').then(() => {
+  console.log("[i18n] Initialized");
+  router.start();
+}).catch(error => {
+  console.error("[i18n] Failed to initialize:", error);
+  router.start(); // Start router anyway to show error state
+});
+
 // Stores the current game instance (PongGame, NeonCityPong, AIPong, or SpaceBattle)
 let gameInstance: PongGame | SpaceBattle | null = null;
+(window as any).gameInstance = null;
 // Stores the current tournament bracket instance
 let bracketInstance: Bracket | null = null;
 // Tracks whether the game is in tournament mode
@@ -53,46 +74,198 @@ let isTournamentMode: boolean = false;
 // Stores the backend tournament ID
 let backendTournamentId: number | null = null;
 
+// Update API base URL
+export const API_BASE_URL = window.location.protocol === 'https:' ? 'https://localhost:4000' : 'http://localhost:4000';
+
 // Defines navigate function to handle route changes
 const navigate = (path: string) => router.navigate(path);
 
-// Helper function to get current user from backend
-async function getCurrentUser(): Promise<{ id: number; username: string; email: string; avatarUrl?: string } | null> {
+// --- Presence WebSocket connection ---
+let presenceSocket: WebSocket | null = null;
+let presenceReconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function connectPresenceWS() {
   const sessionToken = localStorage.getItem("sessionToken");
-  console.log("Fetching current user with sessionToken:", sessionToken); // Added for debugging
+  if (!sessionToken) return;
+  
+  // Clear any existing reconnect timeout
+  if (presenceReconnectTimeout) {
+    clearTimeout(presenceReconnectTimeout);
+    presenceReconnectTimeout = null;
+  }
+
+  const presenceWsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
+  presenceSocket = new WebSocket(presenceWsUrl);
+
+  presenceSocket.onopen = () => {
+    console.log("[Presence WS] Connected");
+    // Send initial ping to establish connection
+    if (presenceSocket?.readyState === WebSocket.OPEN) {
+      presenceSocket.send(JSON.stringify({ type: 'ping' }));
+    }
+  };
+
+  presenceSocket.onclose = () => {
+    console.log("[Presence WS] Disconnected, attempting to reconnect...");
+    // Clear any existing reconnect timeout
+    if (presenceReconnectTimeout) {
+      clearTimeout(presenceReconnectTimeout);
+    }
+    // Try to reconnect after a short delay
+    presenceReconnectTimeout = setTimeout(connectPresenceWS, 2000);
+  };
+
+  presenceSocket.onerror = (error) => {
+    console.error("[Presence WS] Error:", error);
+    // Close and reconnect on error
+    if (presenceSocket) {
+      presenceSocket.close();
+    }
+  };
+
+  presenceSocket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'pong') {
+        // Connection is alive, do nothing
+        return;
+      }
+    } catch (error) {
+      console.error("[Presence WS] Error parsing message:", error);
+    }
+  };
+}
+
+// Call connectPresenceWS after login or on any authenticated page
+function ensurePresenceWS() {
+  if (!presenceSocket || presenceSocket.readyState === WebSocket.CLOSED) {
+    connectPresenceWS();
+  }
+}
+
+// Helper function to get current user from backend
+async function getCurrentUser(): Promise<{ id: number; username: string; email: string } | null> {
+  const sessionToken = localStorage.getItem("sessionToken");
+  console.log("[GetUser Debug] Checking sessionToken:", sessionToken ? "Present" : "Missing");
+
   if (!sessionToken) {
-    console.log("Missing sessionToken, clearing localStorage"); // Added for debugging
-    localStorage.removeItem("sessionToken"); // Clear invalid token
+    console.log("[GetUser Debug] No sessionToken found, clearing localStorage");
+    localStorage.removeItem("sessionToken");
     return null;
   }
+
   try {
-    const response = await fetch(`http://localhost:4000/profile/me`, {
+    console.log("[GetUser Debug] Fetching user profile with sessionToken");
+    const response = await fetch(`${API_BASE_URL}/profile/me`, {
       headers: { "Authorization": `Bearer ${sessionToken}` }
     });
-    console.log("Profile fetch response status:", response.status); // Added for debugging
-    if (!response.ok) throw new Error("Failed to fetch user");
+    console.log("[GetUser Debug] Profile fetch response status:", response.status);
+
+    if (!response.ok) {
+      console.error("[GetUser Debug] Failed to fetch user profile, status:", response.status);
+      throw new Error("Failed to fetch user");
+    }
+
     const { user } = await response.json();
-    return { id: user.id, username: user.name, email: user.email, avatarUrl: user.avatarUrl };
+    // Ensure presence WebSocket is connected
+    ensurePresenceWS();
+    console.log("[GetUser Debug] User profile retrieved successfully:", { id: user.id, username: user.name });
+    return { id: user.id, username: user.name, email: user.email };
   } catch (error) {
-    console.error("Error fetching current user:", error);
+    console.error("[GetUser Debug] Error fetching user profile:", error);
     return null;
   }
 }
 
 // Defines root route ("/")
 router.addRoute("/", async () => {
+  ensurePresenceWS();
+  console.log("[Route Debug] Entering root route handler");
   const currentUser = await getCurrentUser();
+  console.log("[Route Debug] getCurrentUser result:", currentUser ? "User found" : "No user found");
+
   if (currentUser) {
-    return renderLoggedInWelcomePage(
+    console.log("[Route Debug] Rendering logged-in welcome page for user:", currentUser.username);
+    const html = renderLoggedInWelcomePage(
+      async () => {
+        // Logout callback
+        try {
+          await fetch(`${API_BASE_URL}/logout`, { method: 'POST' });
+          router.navigate('/');
+        } catch (error) {
+          console.error('Logout failed:', error);
+        }
+      },
       currentUser.username,
       currentUser.email,
-      currentUser.avatarUrl
+      (mode: string) => {
+        tournament.addPlayers([currentUser.username, "Player 2"]);
+        isTournamentMode = false;
+      },
+      () => router.navigate('/tournament'),
+      () => router.navigate('/settings'),
     );
+    console.log("[Route Debug] Logged-in welcome page HTML generated");
+
+    setTimeout(() => {
+      console.log("[Route Debug] Setting up logged-in welcome page handlers");
+      setupLoggedInWelcomePage(
+        async () => {
+          // Logout callback
+          const sessionToken = localStorage.getItem("sessionToken");
+          if (sessionToken) {
+            try {
+              await fetch(`${API_BASE_URL}/logout`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${sessionToken}` }
+              });
+            } catch (error) {
+              console.error("Logout error:", error);
+            }
+          }
+          localStorage.removeItem("sessionToken");
+          router.navigate("/");
+        },
+        currentUser.username,
+        (mode: string) => {
+          tournament.addPlayers([currentUser.username, "Player 2"]);
+          isTournamentMode = false;
+          if (mode === "standard") {
+            router.navigate("/game");
+          } else if (mode === "neonCity") {
+            router.navigate("/neonCityGame");
+          } else if (mode === "ai") {
+            router.navigate("/aiGame");
+          } else if (mode === "spaceBattle") {
+            router.navigate("/spaceBattleGame");
+          }
+        },
+        () => {
+          // Play Tournament callback
+          tournament.clearPlayers();
+          router.navigate("/tournament");
+        },
+        () => {
+          // Settings callback
+          router.navigate("/settings");
+        },
+        (path: string) => router.navigate(path)
+      );
+    }, 0);
+    return html;
   } else {
-    return renderWelcomePage(
+    console.log("[Route Debug] Rendering pre-login welcome page");
+    const html = renderWelcomePage(
       () => router.navigate("/register"),
       () => router.navigate("/login")
     );
+    setTimeout(() => {
+      setupWelcomePage(
+        () => router.navigate("/register"),
+        () => router.navigate("/login")
+      );
+    }, 0);
+    return html;
   }
 });
 
@@ -103,70 +276,179 @@ router.addRoute("/welcome", () => {
 
 // Defines registration route ("/register")
 router.addRoute("/register", () => {
-  console.log("Rendering /register route");
+  console.log("[Registration Debug] Rendering /register route");
   return renderRegistrationForm(async (username, email, password, avatar) => {
-    console.log("Register onSubmit called");
-    try {
-      const sessionToken = localStorage.getItem("sessionToken");
-      const response = await fetch("http://localhost:4000/register", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})
-        },
-        body: JSON.stringify({ name: username, email, password }),
+    console.log("[Registration Debug] Starting registration process");
+    console.log("[Registration Debug] Form data:", { 
+      username, 
+      email, 
+      hasPassword: !!password, 
+      hasAvatar: !!avatar 
+    });
+    if (avatar) {
+      console.log("[Registration Debug] Avatar details:", {
+        name: avatar.name,
+        type: avatar.type,
+        size: avatar.size + " bytes",
+        lastModified: new Date(avatar.lastModified).toISOString()
       });
-      if (!response.ok) {
-        const data = await response.json();
-        alert((data.error as string) || "Registration failed");
+    }
+
+    try {
+      console.log("[Registration Debug] Creating FormData");
+      const formData = new FormData();
+      formData.append('name', username);
+      formData.append('email', email);
+      formData.append('password', password);
+      if (avatar) {
+        formData.append('avatar', avatar);
+      }
+
+      console.log("[Registration Debug] Sending registration request to server");
+      const registerResponse = await fetch(`${API_BASE_URL}/register`, {
+        method: "POST",
+        body: formData
+      });
+
+      console.log("[Registration Debug] Registration response:", {
+        status: registerResponse.status,
+        ok: registerResponse.ok,
+        statusText: registerResponse.statusText
+      });
+
+      const registerData = await registerResponse.json();
+      console.log("[Registration Debug] Registration response data:", registerData);
+
+      if (!registerResponse.ok) {
+        console.error("[Registration Debug] Registration failed:", registerData.error);
+        alert(registerData.error || "Registration failed");
         return;
       }
-      console.log("Navigating to /");
+
+      // After registration, login to get the session token
+      console.log("[Registration Debug] Registration successful, attempting login");
+      const loginResponse = await fetch("https://localhost:4000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      console.log("[Registration Debug] Login response:", {
+        status: loginResponse.status,
+        ok: loginResponse.ok,
+        statusText: loginResponse.statusText
+      });
+
+      const loginData = await loginResponse.json();
+      console.log("[Registration Debug] Login response data:", {
+        hasSessionToken: !!loginData.sessionToken,
+        error: loginData.error
+      });
+
+      if (!loginResponse.ok) {
+        console.error("[Registration Debug] Login failed:", loginData.error);
+        alert(loginData.error || "Login failed after registration");
+        return;
+      }
+
+      if (!loginData.sessionToken || typeof loginData.sessionToken !== "string") {
+        console.error("[Registration Debug] Invalid session token received");
+        alert("Login failed: Invalid session token");
+        return;
+      }
+
+      // Store the session token
+      localStorage.setItem("sessionToken", loginData.sessionToken);
+      // Ensure WebSocket connection is established before navigation
+      await new Promise<void>((resolve) => {
+        connectPresenceWS();
+        // Give a small delay to ensure connection is established
+        setTimeout(resolve, 100);
+      });
+      console.log("[Registration Debug] Session token stored in localStorage");
+
+      console.log("[Registration Debug] Registration process complete, navigating to home");
       router.navigate("/");
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("[Registration Debug] Unexpected error:", error);
       alert("Server error during registration");
     }
   });
 });
 
+// Defines standard game route ("/game")
+router.addRoute("/game", () => {
+  // Since addRoute expects a synchronous string return, we call the async handler
+  // and immediately return a placeholder string. The actual rendering is handled
+  // by the async function.
+  handleGameRoute().then(html => {
+    const appContainer = document.getElementById("app");
+    if (appContainer) {
+      appContainer.innerHTML = html;
+    }
+  }).catch(error => {
+    console.error("Error in /game route:", error);
+    router.navigate("/"); // Redirect to root on error
+  });
+  return ""; // Return placeholder string synchronously
+});
+
 // Defines login route ("/login")
 router.addRoute("/login", () => {
-  console.log("Rendering /login route");
+  console.log("[Login Debug] Rendering /login route");
   return renderLoginForm(
     async (email, password) => {
-      console.log("Login onSubmit called with:", { email });
+      console.log("[Login Debug] Login form submitted with email:", email);
       try {
-        const response = await fetch("http://localhost:4000/login", {
+        console.log("[Login Debug] Sending login request to backend");
+        const response = await fetch(`${API_BASE_URL}/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
+        console.log("[Login Debug] Login response status:", response.status);
+        
         if (!response.ok) {
           const data = await response.json();
+          console.error("[Login Debug] Login failed:", data.error);
           alert((data.error as string) || "Invalid email or password");
           return;
         }
+
         const user = await response.json();
-        console.log("Credentials valid, setting session token");
+        console.log("[Login Debug] Login successful, user data received:", { 
+          ...user, 
+          sessionToken: user.sessionToken ? 'Present' : 'Missing' 
+        });
+
         // Validate sessionToken before storing
         if (!user.sessionToken || typeof user.sessionToken !== "string") {
-          console.error("Invalid session token received:", user.sessionToken);
+          console.error("[Login Debug] Invalid session token:", user.sessionToken);
           localStorage.removeItem("sessionToken"); // Clear invalid token
           alert("Login failed: Invalid session token");
           return;
         }
+
+        console.log("[Login Debug] Storing session token in localStorage");
         localStorage.setItem("sessionToken", user.sessionToken);
-        console.log("Session token set for user:", user.email);
-        console.log("Attempting navigation to /");
+        // Ensure WebSocket connection is established before navigation
+        await new Promise<void>((resolve) => {
+          connectPresenceWS();
+          // Give a small delay to ensure connection is established
+          setTimeout(resolve, 100);
+        });
+        console.log("[Login Debug] Session token stored for user:", user.email);
+        
+        console.log("[Login Debug] Attempting navigation to /");
         router.navigate("/");
+        console.log("[Login Debug] Navigation command executed");
       } catch (error) {
-        console.error("Login error:", error);
+        console.error("[Login Debug] Login error:", error);
         alert("Server error during login");
       }
     },
     () => {
-      console.log("onRegister callback triggered from login");
+      console.log("[Login Debug] Register link clicked, navigating to /register");
       router.navigate("/register");
     }
   );
@@ -192,7 +474,7 @@ router.addRoute("/tournament", () => {
       if (!sessionToken) {
         throw new Error("User not logged in");
       }
-      const response = await fetch(`http://localhost:4000/profile/me`, {
+      const response = await fetch(`${API_BASE_URL}/profile/me`, {
         headers: { "Authorization": `Bearer ${sessionToken}` }
       });
       if (!response.ok) throw new Error("Failed to fetch logged-in user");
@@ -202,7 +484,7 @@ router.addRoute("/tournament", () => {
         throw new Error("First player name must match the logged-in user's username");
       }
 
-      const tournamentResponse = await fetch("http://localhost:4000/tournament", {
+      const tournamentResponse = await fetch(`${API_BASE_URL}/tournament`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -270,7 +552,7 @@ async function handleGameRoute(): Promise<string> {
                 try {
                   const sessionToken = localStorage.getItem("sessionToken");
                   if (!sessionToken) throw new Error("User not logged in");
-                  const tournamentResponse = await fetch("http://localhost:4000/tournament", {
+                  const tournamentResponse = await fetch(`${API_BASE_URL}/tournament`, {
                     method: "POST",
                     headers: { 
                       "Content-Type": "application/json",
@@ -317,7 +599,7 @@ async function handleGameRoute(): Promise<string> {
   const html = renderGameView(left, right, isTournamentMode ? bracketInstance?.getCurrentRound() : undefined);
   // Initializes standard PongGame instance
   setTimeout(async () => {
-    const currentUser = await getCurrentUser(); // Fetch again in case of timing issues
+    const currentUser = await getCurrentUser();
     if (!currentUser) {
       router.navigate("/login");
       return;
@@ -351,7 +633,7 @@ async function handleGameRoute(): Promise<string> {
             }
 
             // Create tournament match
-            const matchResponse = await fetch("http://localhost:4000/tournament/match", {
+            const matchResponse = await fetch(`${API_BASE_URL}/tournament/match`, {
               method: "POST",
               headers: { 
                 "Content-Type": "application/json",
@@ -371,7 +653,7 @@ async function handleGameRoute(): Promise<string> {
             const { matchId } = await matchResponse.json();
 
             // Set match winner
-            const winnerResponse = await fetch("http://localhost:4000/tournament/match/winner", {
+            const winnerResponse = await fetch(`${API_BASE_URL}/tournament/match/winner`, {
               method: "POST",
               headers: { 
                 "Content-Type": "application/json",
@@ -419,40 +701,20 @@ async function handleGameRoute(): Promise<string> {
       navigate,
       isTournamentMode
     );
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 }
 
-// Defines standard game route ("/game")
-router.addRoute("/game", () => {
-  // Since addRoute expects a synchronous string return, we call the async handler
-  // and immediately return a placeholder string. The actual rendering is handled
-  // by the async function.
-  handleGameRoute().then(html => {
-    const appContainer = document.getElementById("app");
-    if (appContainer) {
-      appContainer.innerHTML = html;
-    }
-  }).catch(error => {
-    console.error("Error in /game route:", error);
-    router.navigate("/"); // Redirect to root on error
-  });
-  return ""; // Return placeholder string synchronously
-});
-
 // Defines neon city game route ("/neonCityGame")
 router.addRoute("/neonCityGame", () => {
-  // Redirects to root if no players are in the tournament
   if (!tournament.hasPlayers()) {
     router.navigate("/");
     return "";
   }
   let left: string, right: string;
-  // Uses default players (non-tournament mode only)
   [left, right] = tournament.getPlayers();
-  // Renders game view (without tournament round information)
   const html = renderGameView(left, right);
-  // Initializes NeonCityPong instance (without onGameEnd callback)
   setTimeout(() => {
     gameInstance = new NeonCityPong(
       left,
@@ -469,8 +731,14 @@ router.addRoute("/neonCityGame", () => {
       statsManager,
       statsManager.getCurrentUser()?.username || null,
       navigate,
-      undefined // No onGameEnd callback since this route doesn't support tournament mode
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 });
@@ -499,10 +767,15 @@ router.addRoute("/aiGame", () => {
       "settingsContainer",
       statsManager,
       statsManager.getCurrentUser()?.username || null,
-      undefined,
-      navigate
+      navigate,
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
-    // No need to call resizeCanvas or start; handled in constructor
+    (window as any).gameInstance = gameInstance;
   }, 0);
   return html;
 });
@@ -514,7 +787,6 @@ router.addRoute("/spaceBattleGame", () => {
     return "";
   }
   let left: string, right: string;
-  // Uses default players (non-tournament mode only)
   [left, right] = tournament.getPlayers();
   const html = renderGameView(left, right);
   setTimeout(() => {
@@ -533,15 +805,30 @@ router.addRoute("/spaceBattleGame", () => {
       statsManager,
       statsManager.getCurrentUser()?.username || null,
       navigate,
-      undefined // No onGameEnd callback since this route doesn't support tournament mode
+      (winnerName: string) => {
+        // Handle game end
+        if (winnerName) {
+          console.log(`Game over! Winner: ${winnerName}`);
+        }
+      }
     );
-    // No need to call resizeCanvas or start; handled in constructor
+    (window as any).gameInstance = gameInstance;
+  }, 0);
+  return html;
+});
+
+// Add multiplayer route
+router.addRoute("/multiplayer", () => {
+  const html = renderMultiplayerMenu();
+  setTimeout(() => {
+    setupMultiplayerMenu((path) => router.navigate(path));
   }, 0);
   return html;
 });
 
 // Add settings route
 router.addRoute("/settings", () => {
+  ensurePresenceWS();
   const settingsView = new SettingsView(statsManager, navigate);
   const loadingContent = '<div class="settings-loading">Loading settings...</div>';
   
@@ -559,7 +846,9 @@ router.addRoute("/settings", () => {
 });
 
 // Add profile route
+let profilePollingInterval: ReturnType<typeof setInterval> | null = null;
 router.addRoute("/profile", async () => {
+  ensurePresenceWS();
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     router.navigate("/login");
@@ -567,29 +856,157 @@ router.addRoute("/profile", async () => {
   }
 
   const sessionToken = localStorage.getItem("sessionToken");
+  let latestFriends: any[] = [];
+  let latestHtml = "";
+  let playerStats: any = {};
+  let matchHistory: any[] = [];
+  let gameStats: Record<string, any> = {};
+
+  async function fetchAndRenderProfile() {
+    try {
+      if (!currentUser) {
+        router.navigate("/login");
+        return;
+      }
+      const response = await fetch(`${API_BASE_URL}/profile/me`, {
+        headers: { "Authorization": `Bearer ${sessionToken}` }
+      });
+      if (!response.ok) throw new Error("Failed to fetch profile data");
+      const { user, matches, friends } = await response.json();
+      latestFriends = friends;
+      playerStats = {
+        wins: user.wins || 0,
+        losses: user.losses || 0,
+        tournamentsWon: user.tournamentsWon || 0,
+      };
+      gameStats = {};
+      matches.forEach((match: any) => {
+        const { gameType, userName, opponentName, userScore, opponentScore } = match;
+        if (!gameStats[gameType]) {
+          gameStats[gameType] = {
+            username: currentUser.username,
+            gameType,
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0
+          };
+        }
+        gameStats[gameType].gamesPlayed++;
+        if (userName === currentUser.username && userScore > opponentScore) {
+          gameStats[gameType].wins++;
+        } else if (opponentName === currentUser.username && opponentScore > userScore) {
+          gameStats[gameType].wins++;
+        } else {
+          gameStats[gameType].losses++;
+        }
+      });
+      matchHistory = matches.map((match: any) => ({
+        winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
+        loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
+        timestamp: match.date
+      }));
+      latestHtml = renderProfilePage(
+        currentUser.username,
+        currentUser.email,
+        playerStats,
+        matchHistory,
+        gameStats,
+        latestFriends,
+        true
+      );
+      const appContainer = document.getElementById("app");
+      if (appContainer) {
+        appContainer.innerHTML = latestHtml;
+        setTimeout(() => {
+          setupProfilePage(() => {
+            if (profilePollingInterval) {
+              clearInterval(profilePollingInterval);
+              profilePollingInterval = null;
+            }
+            // Remove popstate listener
+            window.removeEventListener("popstate", cleanupPolling);
+            // Restore router.handleRouteChange
+            if (router.handleRouteChange === customHandleRouteChange) {
+              router.handleRouteChange = originalHandleRouteChange;
+            }
+            router.navigate("/");
+          }, router.navigate);
+        }, 0);
+      }
+    } catch (error) {
+      console.error("Error fetching profile data:", error);
+      router.navigate("/");
+    }
+  }
+
+  // Initial render
+  await fetchAndRenderProfile();
+
+  // Start polling every 5 seconds
+  if (profilePollingInterval) clearInterval(profilePollingInterval);
+  profilePollingInterval = setInterval(fetchAndRenderProfile, 5000);
+
+  // Clean up polling when navigating away
+  function cleanupPolling() {
+    if (profilePollingInterval) {
+      clearInterval(profilePollingInterval);
+      profilePollingInterval = null;
+    }
+    window.removeEventListener("popstate", cleanupPolling);
+    if (router.handleRouteChange === customHandleRouteChange) {
+      router.handleRouteChange = originalHandleRouteChange;
+    }
+  }
+
+  // Clean up on popstate (browser back/forward)
+  window.addEventListener("popstate", cleanupPolling);
+
+  // Clean up on route change
+  const originalHandleRouteChange = router.handleRouteChange;
+  async function customHandleRouteChange() {
+    cleanupPolling();
+    await originalHandleRouteChange.call(router);
+  }
+  router.handleRouteChange = customHandleRouteChange;
+
+  return latestHtml;
+});
+
+// Add dynamic profile route for viewing other users' profiles
+router.addRoute("/profile/:id", async () => {
+  ensurePresenceWS();
+  const sessionToken = localStorage.getItem("sessionToken");
+  const pathParts = window.location.pathname.split("/");
+  const userId = pathParts[pathParts.length - 1];
+  if (!userId) {
+    router.navigate("/profile");
+    return "";
+  }
+
+  let latestHtml = "";
+  let playerStats: any = {};
+  let matchHistory: any[] = [];
+  let gameStats: Record<string, any> = {};
+  let latestFriends: any[] = [];
+
   try {
-    const response = await fetch(`http://localhost:4000/profile/me`, {
+    const response = await fetch(`${API_BASE_URL}/profile/${userId}`, {
       headers: { "Authorization": `Bearer ${sessionToken}` }
     });
-    
-    if (!response.ok) {
-      throw new Error("Failed to fetch profile data");
-    }
-
-    const { user, matches } = await response.json();
-    const playerStats = {
+    if (!response.ok) throw new Error("Failed to fetch user profile");
+    const { user, matches, friends } = await response.json();
+    latestFriends = friends || [];
+    playerStats = {
       wins: user.wins || 0,
       losses: user.losses || 0,
-      tournamentsWon: user.tournamentsWon || 0
+      tournamentsWon: user.tournamentsWon || 0,
     };
-
-    // Group matches by game type for current session stats
-    const gameStats: Record<string, GameStats> = {};
+    gameStats = {};
     matches.forEach((match: any) => {
       const { gameType, userName, opponentName, userScore, opponentScore } = match;
       if (!gameStats[gameType]) {
         gameStats[gameType] = {
-          username: currentUser.username,
+          username: user.name,
           gameType,
           gamesPlayed: 0,
           wins: 0,
@@ -597,44 +1014,312 @@ router.addRoute("/profile", async () => {
         };
       }
       gameStats[gameType].gamesPlayed++;
-      if (userName === currentUser.username && userScore > opponentScore) {
+      if (userName === user.name && userScore > opponentScore) {
         gameStats[gameType].wins++;
-      } else if (opponentName === currentUser.username && opponentScore > userScore) {
+      } else if (opponentName === user.name && opponentScore > userScore) {
         gameStats[gameType].wins++;
       } else {
         gameStats[gameType].losses++;
       }
     });
-
-    // Convert matches to MatchRecord format
-    const matchHistory: MatchRecord[] = matches.map((match: any) => ({
+    matchHistory = matches.map((match: any) => ({
       winner: match.userScore > match.opponentScore ? match.userName : match.opponentName,
       loser: match.userScore > match.opponentScore ? match.opponentName : match.userName,
       timestamp: match.date
     }));
-
-    const html = renderProfilePage(
-      currentUser.username,
-      currentUser.email,
-      currentUser.avatarUrl,
+    latestHtml = renderProfilePage(
+      user.name,
+      user.email,
       playerStats,
       matchHistory,
-      gameStats
+      gameStats,
+      latestFriends,
+      false
     );
-
-    // Setup profile page after the HTML is rendered
-    setTimeout(() => {
-      setupProfilePage(() => {
-        router.navigate("/welcome");
-      });
-    }, 0);
-
-    return html;
+    const appContainer = document.getElementById("app");
+    if (appContainer) {
+      appContainer.innerHTML = latestHtml;
+      setTimeout(() => {
+        setupProfilePage(() => {
+          router.navigate("/");
+        }, router.navigate);
+      }, 0);
+    }
   } catch (error) {
-    console.error("Error fetching profile data:", error);
+    console.error("Error fetching user profile:", error);
     router.navigate("/welcome");
+  }
+  return latestHtml;
+});
+
+// Add multiplayer game route
+router.addRoute("/multiplayerGame/:matchId", async () => {
+  // Extract matchId from the URL
+  const matchId = window.location.pathname.split("/").pop();
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !matchId) {
+    router.navigate("/");
     return "";
   }
+  // Read the selected game type
+  const multiplayerGameType = sessionStorage.getItem("multiplayerGameType") || "pong";
+  // Render the standard Pong game view with placeholder names
+  const html = renderGameView(currentUser.username, "Waiting for opponent...");
+  setTimeout(() => {
+    // Connect to WebSocket
+    const sessionToken = localStorage.getItem("sessionToken");
+    if (!sessionToken) {
+      alert("Session token not found. Please log in again.");
+      navigate("/login");
+      return;
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.hostname}:4000/ws/match/${matchId}?token=${encodeURIComponent(sessionToken)}`;
+    const ws = new WebSocket(wsUrl);
+    
+    let localPlayerReady = false;
+    let remotePlayerReady = false;
+    let isHost = false;
+    let assigned = false;
+    let opponentName = "Waiting for opponent...";
+    let multiplayerGame: any = null;
+
+    // Store event listener references for cleanup
+    const keydownListener = (e: KeyboardEvent) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        ws.send(JSON.stringify({
+          type: "paddle",
+          key: e.key,
+          pressed: true,
+        }));
+      }
+    };
+
+    const keyupListener = (e: KeyboardEvent) => {
+      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        ws.send(JSON.stringify({
+          type: "paddle",
+          key: e.key,
+          pressed: false,
+        }));
+      }
+    };
+
+    // Function to handle game start
+    const startGame = () => {
+      if (!multiplayerGame) return;
+      console.log('[DEBUG] Start button clicked. localPlayerReady:', localPlayerReady);
+      if (!localPlayerReady) {
+        localPlayerReady = true;
+        multiplayerGame.restartButton.textContent = 'Waiting for opponent...';
+        multiplayerGame.restartButton.disabled = true;
+        ws.send(JSON.stringify({ type: 'ready' }));
+        console.log('[DEBUG] Sent ready message to backend');
+      }
+    };
+
+    ws.onopen = () => {
+      // Send a join message to get assigned
+      ws.send(JSON.stringify({ type: "join", user: currentUser.username }));
+      console.log('[DEBUG] WebSocket connection opened');
+    };
+
+    ws.onclose = (event) => {
+      console.log('[DEBUG] WebSocket closed:', event);
+      if (multiplayerGame) {
+        multiplayerGame.cleanup();
+        multiplayerGame = null;
+      }
+      navigate('/'); // Or navigate('/multiplayer') if you prefer
+    };
+
+    ws.onerror = (event) => {
+      console.log('[DEBUG] WebSocket error:', event);
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      // Forward all messages to the game instance if it has handleWebSocketMessage
+      if (multiplayerGame && typeof multiplayerGame.handleWebSocketMessage === "function") {
+        multiplayerGame.handleWebSocketMessage(data);
+        return; // Prevent further game-specific logic
+      }
+      if (data.type === "cleanup") {
+        if (data.reason === "opponent_left") {
+          alert(i18next.t('game.opponentLeft'));
+        }
+        if (multiplayerGame) {
+          multiplayerGame.cleanup();
+          navigate('/');
+        }
+      }
+      if (data.type === "game_start") {
+        if (multiplayerGame) {
+          // Reset game state
+          multiplayerGame.scoreLeft = 0;
+          multiplayerGame.scoreRight = 0;
+          multiplayerGame.scoreLeftElement.textContent = "0";
+          multiplayerGame.scoreRightElement.textContent = "0";
+          multiplayerGame.gameOver = false;
+          multiplayerGame.gameStarted = true;
+          multiplayerGame.isPaused = false;
+          if (multiplayerGameType === "spaceBattle") {
+            multiplayerGame.targets = [];
+            multiplayerGame.projectiles = [];
+            multiplayerGame.targetSpawnTimer = 0;
+            multiplayerGame.leftShootTimer = 0;
+            multiplayerGame.rightShootTimer = 0;
+          } else {
+            multiplayerGame.paddleLeftY = 160;
+            multiplayerGame.paddleRightY = 160;
+            multiplayerGame.ballX = 400;
+            multiplayerGame.ballY = 200;
+            multiplayerGame.ballSpeedX = 6.0;
+            multiplayerGame.ballSpeedY = 4.1;
+          }
+          multiplayerGame.restartButton.style.display = "none";
+          multiplayerGame.draw();
+          return;
+        }
+      }
+      if (!assigned && data.type === "assign") {
+        isHost = data.host;
+        assigned = true;
+        opponentName = data.opponentName || i18next.t('game.waitingForOpponent');
+        
+        // Initialize the game for both host and guest
+        if (!multiplayerGame) {
+          if (multiplayerGameType === "spaceBattle") {
+            multiplayerGame = new MultiplayerSpaceBattle(
+              isHost ? currentUser.username : opponentName,
+              isHost ? opponentName : currentUser.username,
+              "pongCanvas",
+              "speedSlider",
+              "backgroundColorSelect",
+              "scoreLeft",
+              "scoreRight",
+              "restartButton",
+              "settingsButton",
+              "settingsMenu",
+              "settingsContainer",
+              statsManager,
+              currentUser.username,
+              navigate,
+              matchId,
+              isHost
+            );
+            multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+            multiplayerGame.pollForGameStart();
+          } else {
+            multiplayerGame = new MultiplayerPongGame(
+              isHost ? currentUser.username : opponentName,
+              isHost ? opponentName : currentUser.username,
+              "pongCanvas",
+              "speedSlider",
+              "backgroundColorSelect",
+              "scoreLeft",
+              "scoreRight",
+              "restartButton",
+              "settingsButton",
+              "settingsMenu",
+              "settingsContainer",
+              statsManager,
+              currentUser.username,
+              navigate
+            );
+            multiplayerGame.setupWebSocket(ws, isHost, opponentName);
+            multiplayerGame.pollForGameStart();
+          }
+          multiplayerGame.restartButton.style.display = "block";
+          multiplayerGame.restartButton.textContent = i18next.t('game.start');
+          multiplayerGame.restartButton.disabled = false;
+          multiplayerGame.restartButton.onclick = startGame;
+          if (!isHost && multiplayerGameType !== "spaceBattle") {
+            document.addEventListener("keydown", keydownListener);
+            document.addEventListener("keyup", keyupListener);
+          }
+          multiplayerGame.draw();
+          if (typeof multiplayerGame.attachBackButtonListener === "function") {
+            multiplayerGame.attachBackButtonListener();
+          }
+          // Ensure cleanup and WebSocket close on navigation
+          const cleanupAndClose = () => {
+            if (multiplayerGame) {
+              multiplayerGame.cleanup();
+              multiplayerGame = null;
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.close();
+            }
+            // Notify backend to leave match or queue
+            const sessionToken = localStorage.getItem("sessionToken");
+            if (sessionToken) {
+              fetch(`${API_BASE_URL}/matchmaking/leave`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${sessionToken}` },
+              }).then(() => {
+                // After leaving the match, navigate to the multiplayer menu
+                navigate("/multiplayer");
+              });
+            }
+          };
+          window.addEventListener("popstate", cleanupAndClose, { once: true });
+          window.addEventListener("beforeunload", cleanupAndClose, { once: true });
+          console.log('[DEBUG] Multiplayer game assigned and draw loop started');
+        }
+
+        // Update player names
+        if (isHost) {
+          multiplayerGame.playerLeftName = currentUser.username;
+          const leftNameElem = document.getElementById("playerLeftNameDisplay");
+          if (leftNameElem) leftNameElem.textContent = currentUser.username;
+          if (opponentName && opponentName !== i18next.t('game.waitingForOpponent')) {
+            multiplayerGame.playerRightName = opponentName;
+            const rightNameElem = document.getElementById("playerRightNameDisplay");
+            if (rightNameElem) rightNameElem.textContent = opponentName;
+          }
+        } else {
+          multiplayerGame.playerRightName = currentUser.username;
+          const rightNameElem = document.getElementById("playerRightNameDisplay");
+          if (rightNameElem) rightNameElem.textContent = currentUser.username;
+          if (opponentName && opponentName !== i18next.t('game.waitingForOpponent')) {
+            multiplayerGame.playerLeftName = opponentName;
+            const leftNameElem = document.getElementById("playerLeftNameDisplay");
+            if (leftNameElem) leftNameElem.textContent = opponentName;
+          }
+        }
+      }
+      // Handle opponent join/update
+      else if (multiplayerGame && data.type === "opponent") {
+        // Always update both name displays for robustness
+        if (multiplayerGame.isHost) {
+          multiplayerGame.playerRightName = data.name;
+          const rightNameElem = document.getElementById("playerRightNameDisplay");
+          if (rightNameElem) rightNameElem.textContent = data.name;
+        } else {
+          multiplayerGame.playerLeftName = data.name;
+          const leftNameElem = document.getElementById("playerLeftNameDisplay");
+          if (leftNameElem) leftNameElem.textContent = data.name;
+        }
+        console.log('[DEBUG] Multiplayer game opponent joined and name updated');
+      }
+      // Handle paddle and state messages for multiplayer
+      else if (multiplayerGame && data.type === "paddle") {
+        multiplayerGame.handlePaddleMessage(data);
+      }
+      else if (multiplayerGame && data.type === "state") {
+        multiplayerGame.handleStateMessage(data);
+      }
+      
+    };
+
+    // In /multiplayerGame/:matchId route, after initializing multiplayerGame (both host and guest), always show the back button
+    if (multiplayerGame) {
+      const backButton = document.getElementById("backButton") as HTMLButtonElement;
+      if (backButton) backButton.style.display = "block";
+    }
+  }, 0);
+  return html;
 });
 
 // Starts the router
@@ -656,7 +1341,7 @@ function setupRouteListeners() {
     const playMatchButton = document.getElementById("playMatchButton");
     const playTournamentButton = document.getElementById("playTournamentButton");
     const gameModeSelect = document.getElementById("gameModeSelect") as HTMLSelectElement;
-    const toggleSidebarButton = document.getElementById("toggleSidebarButton");
+    const menuButton = document.getElementById("menuButton");
     const sidebar = document.getElementById("sidebar");
 
     // Setup pre-login buttons
@@ -674,7 +1359,7 @@ function setupRouteListeners() {
         const sessionToken = localStorage.getItem("sessionToken");
         if (sessionToken) {
           try {
-            await fetch("http://localhost:4000/logout", {
+            await fetch(`${API_BASE_URL}/logout`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${sessionToken}` }
             });
@@ -708,6 +1393,11 @@ function setupRouteListeners() {
         if (!currentUser) return;
 
         const selectedMode = gameModeSelect.value;
+        if (selectedMode === "multiplayer") {
+          router.navigate("/multiplayer");
+          return;
+        }
+        
         tournament.addPlayers([currentUser.username, "Player 2"]);
         isTournamentMode = false;
         if (selectedMode === "standard") {
@@ -730,8 +1420,8 @@ function setupRouteListeners() {
       });
     }
 
-    if (toggleSidebarButton && sidebar) {
-      toggleSidebarButton.addEventListener("click", () => {
+    if (menuButton && sidebar) {
+      menuButton.addEventListener("click", () => {
         sidebar.classList.toggle("visible");
       });
 
@@ -740,7 +1430,7 @@ function setupRouteListeners() {
         if (
           sidebar.classList.contains("visible") &&
           !sidebar.contains(target) &&
-          !toggleSidebarButton.contains(target)
+          !menuButton.contains(target)
         ) {
           sidebar.classList.remove("visible");
         }
@@ -749,26 +1439,87 @@ function setupRouteListeners() {
   } else if (window.location.pathname === "/register") {
     console.log("Setting up registration form");
     setupRegistrationForm(async (username, email, password, avatar) => {
-      console.log("Registration form submitted");
-      try {
-        const sessionToken = localStorage.getItem("sessionToken");
-        const response = await fetch("http://localhost:4000/register", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})
-          },
-          body: JSON.stringify({ name: username, email, password }),
+      console.log("[Registration Debug] Starting registration process");
+      console.log("[Registration Debug] Form data:", { username, email, hasPassword: !!password, hasAvatar: !!avatar });
+      if (avatar) {
+        console.log("[Registration Debug] Avatar details:", {
+          name: avatar.name,
+          type: avatar.type,
+          size: avatar.size + " bytes",
+          lastModified: new Date(avatar.lastModified).toISOString()
         });
-        if (!response.ok) {
-          const data = await response.json();
-          alert((data.error as string) || "Registration failed");
+      }
+
+      try {
+        // First register the user
+        console.log("[Registration Debug] Sending registration request to server");
+        const formData = new FormData();
+        formData.append('name', username);
+        formData.append('email', email);
+        formData.append('password', password);
+        if (avatar) {
+          formData.append('avatar', avatar);
+        }
+
+        const registerResponse = await fetch(`${API_BASE_URL}/register`, {
+          method: "POST",
+          body: formData
+        });
+
+        const registerData = await registerResponse.json();
+        console.log("[Registration Debug] Registration response:", {
+          status: registerResponse.status,
+          ok: registerResponse.ok,
+          data: registerData
+        });
+
+        if (!registerResponse.ok) {
+          console.error("[Registration Debug] Registration failed:", registerData.error);
+          alert(registerData.error || "Registration failed");
           return;
         }
-        console.log("Navigating to / from setup");
+
+        // After registration, login to get the session token
+        console.log("[Registration Debug] Registration successful, attempting login");
+        const loginResponse = await fetch(`${API_BASE_URL}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const loginData = await loginResponse.json();
+        console.log("[Registration Debug] Login response:", {
+          status: loginResponse.status,
+          ok: loginResponse.ok,
+          hasSessionToken: !!loginData.sessionToken
+        });
+
+        if (!loginResponse.ok) {
+          console.error("[Registration Debug] Login failed:", loginData.error);
+          alert(loginData.error || "Login failed after registration");
+          return;
+        }
+
+        if (!loginData.sessionToken || typeof loginData.sessionToken !== "string") {
+          console.error("[Registration Debug] Invalid session token received");
+          alert("Login failed: Invalid session token");
+          return;
+        }
+
+        // Store the session token
+        localStorage.setItem("sessionToken", loginData.sessionToken);
+        // Ensure WebSocket connection is established before navigation
+        await new Promise<void>((resolve) => {
+          connectPresenceWS();
+          // Give a small delay to ensure connection is established
+          setTimeout(resolve, 100);
+        });
+        console.log("[Registration Debug] Session token stored in localStorage");
+
+        console.log("[Registration Debug] Registration process complete, navigating to home");
         router.navigate("/");
       } catch (error) {
-        console.error("Registration error:", error);
+        console.error("[Registration Debug] Unexpected error:", error);
         alert("Server error during registration");
       }
     });
@@ -778,7 +1529,7 @@ function setupRouteListeners() {
       async (email, password) => {
         console.log("Login form submitted from setup with:", { email });
         try {
-          const response = await fetch("http://localhost:4000/login", {
+          const response = await fetch(`${API_BASE_URL}/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
@@ -798,6 +1549,12 @@ function setupRouteListeners() {
             return;
           }
           localStorage.setItem("sessionToken", user.sessionToken);
+          // Ensure WebSocket connection is established before navigation
+          await new Promise<void>((resolve) => {
+            connectPresenceWS();
+            // Give a small delay to ensure connection is established
+            setTimeout(resolve, 100);
+          });
           console.log("Session token set for user:", user.email);
           console.log("Attempting navigation to / from setup");
           router.navigate("/");
@@ -836,7 +1593,7 @@ function setupRouteListeners() {
 
               // Create tournament on backend with usernames
               const sessionToken = localStorage.getItem("sessionToken");
-              const tournamentResponse = await fetch("http://localhost:4000/tournament", {
+              const tournamentResponse = await fetch(`${API_BASE_URL}/tournament`, {
                 method: "POST",
                 headers: { 
                   "Content-Type": "application/json",
@@ -876,3 +1633,72 @@ window.addEventListener("popstate", () => {
   console.log("popstate event, pathname:", window.location.pathname);
   router.handleRouteChange();
 });
+
+async function handleLogin(email: string, password: string) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      localStorage.setItem("sessionToken", data.sessionToken);
+      statsManager.setCurrentUser({
+        username: data.name,
+        email: data.email,
+        password: "", // Don't store password
+      });
+
+      // Cache the avatar after successful login
+      const avatar = await statsManager.getAvatar(data.name);
+      
+      // Navigate to welcome page
+      router.navigate("/welcome");
+    } else {
+      const errorDiv = document.getElementById("loginError");
+      if (errorDiv) {
+        errorDiv.textContent = data.error;
+      }
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    const errorDiv = document.getElementById("loginError");
+    if (errorDiv) {
+      errorDiv.textContent = "An error occurred during login";
+    }
+  }
+}
+
+// After DOMContentLoaded, render the global language switcher
+window.addEventListener('DOMContentLoaded', () => {
+  const langDiv = document.getElementById('globalLanguageSwitcher');
+  if (langDiv) {
+    langDiv.innerHTML = renderLanguageSwitcherWithHandler(() => {
+      // Reload the current route
+      router.navigate(window.location.pathname);
+    });
+    setupLanguageSwitcherWithHandler(() => {
+      router.navigate(window.location.pathname);
+    });
+  }
+});
+
+// Add beforeunload handler to close presenceSocket
+window.addEventListener("beforeunload", () => {
+  if (presenceSocket) {
+    presenceSocket.close();
+    presenceSocket = null;
+  }
+  if (presenceReconnectTimeout) {
+    clearTimeout(presenceReconnectTimeout);
+    presenceReconnectTimeout = null;
+  }
+});
+
+// On logout, close presenceSocket
+// In all logout callbacks, add:
+// if (presenceSocket) presenceSocket.close();

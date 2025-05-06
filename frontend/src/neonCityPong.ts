@@ -1,5 +1,6 @@
 import { PongGame } from "./game.js";
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Defines interfaces for buildings and power-ups used in the game
 interface Building {
@@ -23,43 +24,44 @@ interface PowerUp {
 // Extends the base PongGame class to create a neon-themed version with additional features
 export class NeonCityPong extends PongGame {
   // Array to store building objects for the background
-  private buildings: Building[];
+  protected buildings: Building[];
   // Array to store power-up objects
-  private powerUps: PowerUp[];
+  protected powerUps: PowerUp[];
   // Timer to control power-up spawning
-  private powerUpTimer: number;
+  protected powerUpTimer: number;
   // Constant for power-up spawn interval
-  private readonly POWER_UP_SPAWN_INTERVAL: number;
+  protected readonly POWER_UP_SPAWN_INTERVAL: number;
   // Stores the animation frame ID for the game loop
-  private animationFrameId: number | null = null;
+  protected animationFrameId: number | null = null;
   // Heights for left and right paddles, which can change with power-ups
-  private paddleLeftHeight: number = 80;
-  private paddleRightHeight: number = 80;
+  protected paddleLeftHeight: number = 80;
+  protected paddleRightHeight: number = 80;
   // Function to navigate to different routes
-  protected navigate: (path: string) => void;
+  public navigate: (path: string) => void;
   // Offscreen canvas for static background
-  private backgroundCanvas: HTMLCanvasElement | null = null;
-  private backgroundCtx: CanvasRenderingContext2D | null = null;
+  protected backgroundCanvas: HTMLCanvasElement | null = null;
+  protected backgroundCtx: CanvasRenderingContext2D | null = null;
+  protected isBackgroundInitializing: boolean = false;
   // Reference to background color select element
-  protected backgroundColorSelect: HTMLSelectElement | null = null;
+  public backgroundColorSelect: HTMLSelectElement | null = null;
   // Static background image
-  private backgroundImage: HTMLImageElement | null = null;
+  protected backgroundImage: HTMLImageElement | null = null;
   // Store the background color select ID for re-fetching if needed
-  private readonly backgroundColorSelectId: string;
+  protected readonly backgroundColorSelectId: string;
   // Background color with default value
-  protected backgroundColor: string = "#d8a8b5";
+  public backgroundColor: string = "#d8a8b5";
   // Tracks if speed boost is active
-  private isSpeedBoosted: boolean = false;
+  protected isSpeedBoosted: boolean = false;
   // Stores the boosted speed values
-  private boostedSpeedX: number = 0;
-  private boostedSpeedY: number = 0;
+  protected boostedSpeedX: number = 0;
+  protected boostedSpeedY: number = 0;
   // Tracks active power-up effects
-  private leftSpeedBoostActive: boolean = false;
-  private rightSpeedBoostActive: boolean = false;
-  private leftPaddleExtendActive: boolean = false;
-  private rightPaddleExtendActive: boolean = false;
+  protected leftSpeedBoostActive: boolean = false;
+  protected rightSpeedBoostActive: boolean = false;
+  protected leftPaddleExtendActive: boolean = false;
+  protected rightPaddleExtendActive: boolean = false;
   // Maximum speed limit for the ball
-  private readonly MAX_SPEED_INCREASE: number = 1.5; // 50% above base speed
+  protected readonly MAX_SPEED_INCREASE: number = 1.5; // 50% above base speed
 
   // Constructor initializes the game with player names, DOM element IDs, and other dependencies
   constructor(
@@ -125,7 +127,9 @@ export class NeonCityPong extends PongGame {
     this.backgroundImage.src = "assets/buildingBackground.png";
     this.backgroundImage.onload = () => {
       console.log("Background image loaded successfully");
-      this.initBackgroundCanvas();
+      if (this.backgroundCtx) {
+        this.drawNeonBackground(this.backgroundCtx);
+      }
     };
     this.backgroundImage.onerror = () => {
       console.error("Failed to load background image");
@@ -147,9 +151,8 @@ export class NeonCityPong extends PongGame {
     this.checkPowerUpCollision = this.checkPowerUpCollision.bind(this);
     this.checkBuildingCollision = this.checkBuildingCollision.bind(this);
 
-    // Resizes canvas, initializes background, and starts animation
+    // Resizes canvas and starts animation
     this.resizeCanvas();
-    this.initBackgroundCanvas();
     window.addEventListener("resize", () => {
       this.resizeCanvas();
       this.initBackgroundCanvas();
@@ -157,8 +160,9 @@ export class NeonCityPong extends PongGame {
   }
 
   // Initializes the offscreen background canvas
-  private initBackgroundCanvas(): void {
+  protected initBackgroundCanvas(): void {
     if (!this.canvas) return;
+    this.isBackgroundInitializing = true;
     this.backgroundCanvas = document.createElement("canvas");
     this.backgroundCanvas.width = this.canvas.width;
     this.backgroundCanvas.height = this.canvas.height;
@@ -167,7 +171,10 @@ export class NeonCityPong extends PongGame {
       console.error("Failed to get 2D context for background canvas");
       return;
     }
+    if (this.backgroundImage && this.backgroundImage.complete) {
     this.drawNeonBackground(this.backgroundCtx);
+    }
+    this.isBackgroundInitializing = false;
   }
 
   // Resizes the canvas based on browser window size and maintains aspect ratio
@@ -227,7 +234,7 @@ export class NeonCityPong extends PongGame {
   }
 
   // Spawns a power-up at a random position near a paddle
-  private spawnPowerUp(): void {
+  protected spawnPowerUp(): void {
     // Check if power-ups can be spawned
     const canSpawnLeftSpeed = !this.leftSpeedBoostActive && !this.powerUps.some(p => p.active && p.type === "speedBoost" && p.side === "left");
     const canSpawnRightSpeed = !this.rightSpeedBoostActive && !this.powerUps.some(p => p.active && p.type === "speedBoost" && p.side === "right");
@@ -261,27 +268,28 @@ export class NeonCityPong extends PongGame {
   }
 
   // Draws the neon-themed background
-  private drawNeonBackground(ctx: CanvasRenderingContext2D): void {
-    console.log("Drawing neon background");
+  protected drawNeonBackground(ctx: CanvasRenderingContext2D): void {
     const canvas = ctx.canvas;
     ctx.fillStyle = this.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw the static background image, stretched to fit canvas width and aligned at the bottom
-    if (this.backgroundImage && this.backgroundImage.complete && this.backgroundImage.naturalWidth !== 0) {
+    if (!this.backgroundImage || !this.backgroundImage.complete) {
+      // Only warn once when image is completely missing
+      if (!this.backgroundImage) {
+        console.warn("Background image not loaded, skipping draw");
+      }
+    } else {
       const imgWidth = canvas.width; // Stretch to full canvas width
       const aspectRatio = this.backgroundImage.naturalWidth / this.backgroundImage.naturalHeight;
       const imgHeight = imgWidth / aspectRatio; // Maintain original aspect ratio
       const imgY = canvas.height - imgHeight + 200 * this.scale; // Shift downward by 200 scaled pixels
       ctx.drawImage(this.backgroundImage, 0, imgY, imgWidth, imgHeight);
-    } else {
-      console.warn("Background image not loaded, skipping draw");
     }
   }
 
   // Draws moving buildings in the background
-  private drawBuildings(ctx: CanvasRenderingContext2D): void {
-    console.log("Drawing buildings");
+  protected drawBuildings(ctx: CanvasRenderingContext2D): void {
     if (!this.buildings) {
       console.warn("Buildings array is undefined, reinitializing...");
       const buildingImage = new Image();
@@ -298,17 +306,20 @@ export class NeonCityPong extends PongGame {
       if (building.y < -building.height) building.y = this.canvas.height;
       if (building.y > this.canvas.height) building.y = -building.height;
 
-      if (building.image && building.image.complete && building.image.naturalWidth !== 0) {
-        ctx.drawImage(building.image, building.x, building.y, building.width, building.height);
+      if (!building.image || !building.image.complete || building.image.naturalWidth === 0) {
+        // Only warn once when image is actually not loaded
+        if (!building.image) {
+          console.warn("Building image not loaded for building at x:", building.x);
+        }
       } else {
-        console.warn("Building image not loaded for building at x:", building.x);
+        ctx.drawImage(building.image, building.x, building.y, building.width, building.height);
       }
       ctx.restore();
     });
   }
 
   // Draws active power-ups on the canvas
-  private drawPowerUps(ctx: CanvasRenderingContext2D): void {
+  protected drawPowerUps(ctx: CanvasRenderingContext2D): void {
     console.log("Drawing power-ups");
     if (!this.powerUps) {
       console.warn("powerUps array is undefined, reinitializing...");
@@ -324,98 +335,97 @@ export class NeonCityPong extends PongGame {
   }
 
   // Checks for collisions between power-ups and paddles
-  // Checks for collisions between power-ups and paddles
-private checkPowerUpCollision(): void {
-  if (!this.powerUps) {
-    console.warn("powerUps array is undefined, reinitializing...");
-    this.powerUps = [];
+  protected checkPowerUpCollision(): void {
+    if (!this.powerUps) {
+      console.warn("powerUps array is undefined, reinitializing...");
+      this.powerUps = [];
+    }
+    this.powerUps.forEach(powerUp => {
+      if (!powerUp.active) return;
+
+      // Calculate base speed from slider for max speed cap
+      const speedMultiplier = this.getSpeedMultiplier(); // Use standard multiplier (/ 5)
+      const baseSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+      const baseSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier;
+      const maxSpeedX = baseSpeedX * this.MAX_SPEED_INCREASE;
+      const maxSpeedY = baseSpeedY * this.MAX_SPEED_INCREASE;
+
+      // Defines left paddle boundaries
+      const leftPaddle = {
+        x: 10 * this.scale,
+        y: this.paddleLeftY,
+        width: 20 * this.scale,
+        height: this.paddleLeftHeight,
+      };
+      // Checks collision with left paddle
+      if (
+        powerUp.x + 10 * this.scale > leftPaddle.x &&
+        powerUp.x - 10 * this.scale < leftPaddle.x + leftPaddle.width &&
+        powerUp.y + 10 * this.scale > leftPaddle.y &&
+        powerUp.y - 10 * this.scale < leftPaddle.y + leftPaddle.height
+      ) {
+        powerUp.active = false;
+        if (powerUp.type === "speedBoost") {
+          // Apply speed boost based on current speed with cap
+          this.isSpeedBoosted = true;
+          this.boostedSpeedX = Math.min(Math.abs(this.ballSpeedX) * 1.5, maxSpeedX) * Math.sign(this.ballSpeedX);
+          this.boostedSpeedY = Math.min(Math.abs(this.ballSpeedY) * 1.5, maxSpeedY) * Math.sign(this.ballSpeedY);
+          this.ballSpeedX = this.boostedSpeedX;
+          this.ballSpeedY = this.boostedSpeedY;
+          this.leftSpeedBoostActive = true;
+          console.log(`Speed Boost activated for left paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
+        } else if (powerUp.type === "paddleExtend") {
+          this.paddleLeftHeight = 120 * this.scale;
+          this.leftPaddleExtendActive = true;
+          console.log("Left paddle extended!");
+          setTimeout(() => {
+            this.paddleLeftHeight = 80 * this.scale;
+            this.leftPaddleExtendActive = false;
+            console.log("Left paddle reverted to normal size");
+          }, 5000);
+        }
+      }
+
+      // Defines right paddle boundaries
+      const rightPaddle = {
+        x: (this.baseWidth - 30) * this.scale,
+        y: this.paddleRightY,
+        width: 20 * this.scale,
+        height: this.paddleRightHeight,
+      };
+      // Checks collision with right paddle
+      if (
+        powerUp.x + 10 * this.scale > rightPaddle.x &&
+        powerUp.x - 10 * this.scale < rightPaddle.x + rightPaddle.width &&
+        powerUp.y + 10 * this.scale > rightPaddle.y &&
+        powerUp.y - 10 * this.scale < rightPaddle.y + rightPaddle.height
+      ) {
+        powerUp.active = false;
+        if (powerUp.type === "speedBoost") {
+          // Apply speed boost based on current speed with cap
+          this.isSpeedBoosted = true;
+          this.boostedSpeedX = Math.min(Math.abs(this.ballSpeedX) * 1.5, maxSpeedX) * Math.sign(this.ballSpeedX);
+          this.boostedSpeedY = Math.min(Math.abs(this.ballSpeedY) * 1.5, maxSpeedY) * Math.sign(this.ballSpeedY);
+          this.ballSpeedX = this.boostedSpeedX;
+          this.ballSpeedY = this.boostedSpeedY;
+          this.rightSpeedBoostActive = true;
+          console.log(`Speed Boost activated for right paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
+        } else if (powerUp.type === "paddleExtend") {
+          this.paddleRightHeight = 120 * this.scale;
+          this.rightPaddleExtendActive = true;
+          console.log("Right paddle extended!");
+          setTimeout(() => {
+            this.paddleRightHeight = 80 * this.scale;
+            this.rightPaddleExtendActive = false;
+            console.log("Right paddle reverted to normal size");
+          }, 5000);
+        }
+      }
+    });
   }
-  this.powerUps.forEach(powerUp => {
-    if (!powerUp.active) return;
-
-    // Calculate base speed from slider for max speed cap
-    const speedMultiplier = this.getSpeedMultiplier(); // Use standard multiplier (/ 5)
-    const baseSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
-    const baseSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier;
-    const maxSpeedX = baseSpeedX * this.MAX_SPEED_INCREASE;
-    const maxSpeedY = baseSpeedY * this.MAX_SPEED_INCREASE;
-
-    // Defines left paddle boundaries
-    const leftPaddle = {
-      x: 10 * this.scale,
-      y: this.paddleLeftY,
-      width: 20 * this.scale,
-      height: this.paddleLeftHeight,
-    };
-    // Checks collision with left paddle
-    if (
-      powerUp.x + 10 * this.scale > leftPaddle.x &&
-      powerUp.x - 10 * this.scale < leftPaddle.x + leftPaddle.width &&
-      powerUp.y + 10 * this.scale > leftPaddle.y &&
-      powerUp.y - 10 * this.scale < leftPaddle.y + leftPaddle.height
-    ) {
-      powerUp.active = false;
-      if (powerUp.type === "speedBoost") {
-        // Apply speed boost based on current speed with cap
-        this.isSpeedBoosted = true;
-        this.boostedSpeedX = Math.min(Math.abs(this.ballSpeedX) * 1.5, maxSpeedX) * Math.sign(this.ballSpeedX);
-        this.boostedSpeedY = Math.min(Math.abs(this.ballSpeedY) * 1.5, maxSpeedY) * Math.sign(this.ballSpeedY);
-        this.ballSpeedX = this.boostedSpeedX;
-        this.ballSpeedY = this.boostedSpeedY;
-        this.leftSpeedBoostActive = true;
-        console.log(`Speed Boost activated for left paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
-      } else if (powerUp.type === "paddleExtend") {
-        this.paddleLeftHeight = 120 * this.scale;
-        this.leftPaddleExtendActive = true;
-        console.log("Left paddle extended!");
-        setTimeout(() => {
-          this.paddleLeftHeight = 80 * this.scale;
-          this.leftPaddleExtendActive = false;
-          console.log("Left paddle reverted to normal size");
-        }, 5000);
-      }
-    }
-
-    // Defines right paddle boundaries
-    const rightPaddle = {
-      x: (this.baseWidth - 30) * this.scale,
-      y: this.paddleRightY,
-      width: 20 * this.scale,
-      height: this.paddleRightHeight,
-    };
-    // Checks collision with right paddle
-    if (
-      powerUp.x + 10 * this.scale > rightPaddle.x &&
-      powerUp.x - 10 * this.scale < rightPaddle.x + rightPaddle.width &&
-      powerUp.y + 10 * this.scale > rightPaddle.y &&
-      powerUp.y - 10 * this.scale < rightPaddle.y + rightPaddle.height
-    ) {
-      powerUp.active = false;
-      if (powerUp.type === "speedBoost") {
-        // Apply speed boost based on current speed with cap
-        this.isSpeedBoosted = true;
-        this.boostedSpeedX = Math.min(Math.abs(this.ballSpeedX) * 1.5, maxSpeedX) * Math.sign(this.ballSpeedX);
-        this.boostedSpeedY = Math.min(Math.abs(this.ballSpeedY) * 1.5, maxSpeedY) * Math.sign(this.ballSpeedY);
-        this.ballSpeedX = this.boostedSpeedX;
-        this.ballSpeedY = this.boostedSpeedY;
-        this.rightSpeedBoostActive = true;
-        console.log(`Speed Boost activated for right paddle! X: ${this.ballSpeedX}, Y: ${this.ballSpeedY}`);
-      } else if (powerUp.type === "paddleExtend") {
-        this.paddleRightHeight = 120 * this.scale;
-        this.rightPaddleExtendActive = true;
-        console.log("Right paddle extended!");
-        setTimeout(() => {
-          this.paddleRightHeight = 80 * this.scale;
-          this.rightPaddleExtendActive = false;
-          console.log("Right paddle reverted to normal size");
-        }, 5000);
-      }
-    }
-  });
-}
 
   // Checks for collisions between the ball and buildings
-  private checkBuildingCollision(): void {
+  protected checkBuildingCollision(): void {
     if (!this.buildings) {
       console.warn("Buildings array is undefined, reinitializing...");
       const buildingImage = new Image();
@@ -504,7 +514,7 @@ private checkPowerUpCollision(): void {
   }
 
   // Main draw loop for rendering the game
-  protected draw(timestamp: number = performance.now()): void {
+  public draw(timestamp: number = performance.now()): void {
     if (!this.ctx) {
       console.error("Canvas context is null");
       return;
@@ -524,11 +534,34 @@ private checkPowerUpCollision(): void {
     // Draw the pre-rendered background
     if (this.backgroundCanvas) {
       this.ctx.drawImage(this.backgroundCanvas, 0, 0);
-    } else {
-      console.warn("Background canvas not initialized, reinitializing...");
+    } else if (!this.isBackgroundInitializing) {
       this.initBackgroundCanvas();
       if (this.backgroundCanvas) {
         this.ctx.drawImage(this.backgroundCanvas, 0, 0);
+      }
+    }
+
+    // Draw countdown if active
+    if (this.isCountingDown) {
+      const currentTime = performance.now();
+      const elapsed = (currentTime - this.countdownStartTime) / 1000;
+      const remaining = Math.ceil(3 - elapsed);
+      
+      if (remaining > 0) {
+        this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+        this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+        this.ctx.shadowBlur = 10 * this.scale;
+        this.ctx.shadowOffsetX = 0;
+        this.ctx.shadowOffsetY = 0;
+        this.ctx.fillText(remaining.toString(), this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.shadowColor = "transparent";
+        this.ctx.shadowBlur = 0;
+      } else {
+        this.isCountingDown = false;
+        this.gameStarted = true;
       }
     }
 
@@ -601,8 +634,6 @@ private checkPowerUpCollision(): void {
           this.gameOver = true;
           this.powerUps = []; // Clear all power-ups
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -633,8 +664,6 @@ private checkPowerUpCollision(): void {
           this.gameOver = true;
           this.powerUps = []; // Clear all power-ups
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Neon City Pong", {
             player1Score: this.scoreLeft,
             player2Score: this.scoreRight,
@@ -678,8 +707,9 @@ private checkPowerUpCollision(): void {
       this.ctx.shadowBlur = 10 * this.scale;
       this.ctx.shadowOffsetX = 0;
       this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 3 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

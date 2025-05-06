@@ -1,21 +1,55 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import fastifyEnv from './config';
-import { initializeDatabase } from './database';
-import { authRoutes } from './routes/auth';
-import { profileRoutes } from './routes/profile';
-import { settingsRoutes } from './routes/settings';
-import { matchRoutes } from './routes/match';
-import { tournamentRoutes } from './routes/tournament';
-import { statsRoutes } from './routes/stats';
-import { sessionMiddleware } from './routes/middleware';
+import { initializeDatabase } from './database.js';
+import { authRoutes } from './routes/auth.js';
+import { profileRoutes } from './routes/profile.js';
+import { settingsRoutes } from './routes/settings.js';
+import { matchRoutes } from './routes/match.js';
+import { tournamentRoutes } from './routes/tournament.js';
+import { statsRoutes } from './routes/stats.js';
+import { matchmakingRoutes } from './routes/matchmaking.js';
+import { sessionMiddleware } from './routes/middleware.js';
+import { wsRoutes } from './routes/ws.js';
+import { avatarRoutes } from './routes/avatar.js';
+import fs from 'fs';
+import path from 'path';
+import { Database } from 'sqlite3';
 
 async function buildServer() {
-  const fastify = Fastify({ logger: true });
+  const fastify: FastifyInstance = Fastify({ 
+    logger: true,
+    https: {
+      key: fs.readFileSync(path.join(__dirname, '../certs/key.pem')),
+      cert: fs.readFileSync(path.join(__dirname, '../certs/cert.pem'))
+    }
+  });
 
   await fastify.register(fastifyEnv);
 
-  await fastify.register(cors, { origin: '*' });
+  // Create HTTP server for redirection if HTTPS_ONLY is true
+  if (fastify.config.HTTPS_ONLY) {
+    const httpServer = Fastify({ logger: true });
+    httpServer.all('/*', async (request: FastifyRequest, reply: FastifyReply) => {
+      const httpsUrl = `https://${request.hostname}${request.url}`;
+      reply.redirect(301, httpsUrl);
+    });
+    await httpServer.listen({ port: 80, host: '0.0.0.0' });
+  }
+
+  await fastify.register(cors, { 
+    origin: 'https://localhost',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  });
+
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 2 * 1024 * 1024 // 2MB
+    }
+  });
 
   const db = await initializeDatabase(fastify);
 
@@ -28,12 +62,15 @@ async function buildServer() {
   await matchRoutes(fastify, db);
   await tournamentRoutes(fastify, db);
   await statsRoutes(fastify, db);
+  await matchmakingRoutes(fastify);
+  await wsRoutes(fastify, db);
+  await avatarRoutes(fastify, db);
 
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
     return { status: 'Server is running' };
   });
 
-  fastify.addHook('onClose', (instance, done) => {
+  fastify.addHook('onClose', (instance: FastifyInstance, done: (err?: Error) => void) => {
     db.close((err) => {
       if (err) {
         fastify.log.error('Error closing database:', err);

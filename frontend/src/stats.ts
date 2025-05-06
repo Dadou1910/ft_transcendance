@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './index.js';
+
 const uuidv4 = () => crypto.randomUUID();
 
 // Defines structure for a match record
@@ -19,7 +21,6 @@ export interface User {
   username: string;
   email: string;
   password: string;
-  avatarUrl?: string;
 }
 
 // Defines structure for a player
@@ -71,6 +72,7 @@ export class StatsManager {
   private userSettings: Record<string, UserSettings> = {};
   private gameStats: Record<string, Record<string, GameStats>> = {};
   private currentUser: User | null = null;
+  private avatarCache: { [username: string]: string } = {}; // Memory cache for avatars
 
   private log(message: string, data?: any): void {
     console.log(`[StatsManager] ${message}`, data ? data : '');
@@ -89,7 +91,7 @@ export class StatsManager {
     try {
       if (this.sessionToken) {
         this.log('Attempting to fetch user profile with session token');
-        const response = await fetch(`http://localhost:4000/profile/me`, {
+        const response = await fetch(`${API_BASE_URL}/profile/me`, {
           headers: { "Authorization": `Bearer ${this.sessionToken}` }
         });
         if (response.ok) {
@@ -100,7 +102,6 @@ export class StatsManager {
             username: user.name,
             email: user.email,
             password: "",
-            avatarUrl: user.avatarUrl,
           });
           this.matchHistory = matches.map((m: any) => ({
             winner: m.userScore > m.opponentScore ? m.userName : m.opponentName,
@@ -129,18 +130,10 @@ export class StatsManager {
   }
 
   // --- User Management ---
-  addUser(username: string, email: string, password: string, avatar?: File): void {
-    let avatarUrl: string | undefined;
-    if (avatar) {
-      try {
-        avatarUrl = URL.createObjectURL(avatar);
-      } catch (error) {
-        console.error("Failed to create avatar URL:", error);
-      }
-    }
-    const user = { username, email: email.toLowerCase(), password, avatarUrl };
+  addUser(username: string, email: string, password: string): void {
+    const user = { username, email: email.toLowerCase(), password };
     this.users.push(user);
-    console.log("Added user:", { username, email, avatarUrl });
+    console.log("Added user:", { username, email });
   }
 
   hasUser(username: string): boolean {
@@ -225,7 +218,7 @@ export class StatsManager {
         throw new Error("No session token available. Please log in again.");
       }
   
-      const userResponse = await fetch(`http://localhost:4000/profile/me`, {
+      const userResponse = await fetch(`${API_BASE_URL}/profile/me`, {
         headers: { "Authorization": `Bearer ${sessionToken}` }
       });
       if (!userResponse.ok) {
@@ -269,12 +262,11 @@ export class StatsManager {
         gameType,
       });
   
-      const sessionTokenForHeader = matchDetails.sessionToken ?? null;
-      const matchResponse = await fetch("http://localhost:4000/match", {
+      const matchResponse = await fetch(`${API_BASE_URL}/match`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(sessionTokenForHeader ? { "Authorization": `Bearer ${sessionTokenForHeader}` } : {})
+          "Authorization": `Bearer ${sessionToken}`
         },
         body: JSON.stringify({
           userName,
@@ -351,7 +343,7 @@ export class StatsManager {
     }
 
     try {
-      const response = await fetch("http://localhost:4000/profile/me", {
+      const response = await fetch(`${API_BASE_URL}/profile/me`, {
         headers: {
           "Authorization": `Bearer ${sessionToken}`
         }
@@ -371,11 +363,11 @@ export class StatsManager {
   }
 
   getCurrentUser(): User | null {
-    const sessionToken = localStorage.getItem("sessionToken");
-    if (!sessionToken) {
-      return null;
-    }
     return this.currentUser;
+  }
+
+  setCurrentUser(user: User) {
+    this.currentUser = user;
   }
 
   // --- User Settings Management ---
@@ -389,7 +381,7 @@ export class StatsManager {
     try {
       const sessionToken = localStorage.getItem("sessionToken");
       // Fetch user ID by username using /profile/:id
-      const userResponse = await fetch(`http://localhost:4000/profile/${encodeURIComponent(username)}`, {
+      const userResponse = await fetch(`${API_BASE_URL}/profile/${encodeURIComponent(username)}`, {
         headers: { "Authorization": `Bearer ${sessionToken}` }
       });
       if (!userResponse.ok) {
@@ -398,7 +390,7 @@ export class StatsManager {
       const { user: backendUser } = await userResponse.json();
 
       // Send settings to backend
-      const settingsResponse = await fetch("http://localhost:4000/settings", {
+      const settingsResponse = await fetch(`${API_BASE_URL}/settings`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -423,5 +415,50 @@ export class StatsManager {
 
   getUserSettings(username: string): UserSettings | null {
     return this.userSettings[username] || null;
+  }
+
+  // Avatar caching methods
+  async getAvatar(username: string): Promise<string> {
+    // Check memory cache first
+    if (this.avatarCache[username]) {
+      return this.avatarCache[username];
+    }
+
+    // Check localStorage
+    const cachedAvatar = localStorage.getItem(`avatar_${username}`);
+    if (cachedAvatar) {
+      this.avatarCache[username] = cachedAvatar; // Update memory cache
+      return cachedAvatar;
+    }
+
+    // Fetch from server if not in cache
+    const avatar = await this.fetchAvatar(username);
+    this.cacheAvatar(username, avatar);
+    return avatar;
+  }
+
+  private async fetchAvatar(username: string): Promise<string> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/avatar/${encodeURIComponent(username)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch avatar');
+      }
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error('Error fetching avatar:', error);
+      // Return default avatar
+      return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+';
+    }
+  }
+
+  cacheAvatar(username: string, avatar: string) {
+    this.avatarCache[username] = avatar;
+    localStorage.setItem(`avatar_${username}`, avatar);
+  }
+
+  clearAvatarCache(username: string) {
+    delete this.avatarCache[username];
+    localStorage.removeItem(`avatar_${username}`);
   }
 }

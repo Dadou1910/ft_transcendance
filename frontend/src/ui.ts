@@ -1,4 +1,8 @@
-import { PlayerStats, MatchRecord, GameStats } from './stats';
+import { PlayerStats, MatchRecord, GameStats, StatsManager } from './stats.js';
+import { API_BASE_URL } from './index.js';
+import i18next from './i18n/config.js';
+import { renderLanguageSwitcherWithHandler, setupLanguageSwitcherWithHandler } from './language.js';
+import { showError } from './utils.js';
 
 // Manages UI rendering and setup for the Pong Transcendence game
 // Includes welcome pages, game view, forms, and tournament end screen
@@ -13,17 +17,17 @@ export function renderWelcomePage(onRegister: () => void, onLogin: () => void): 
     <div class="full-screen-container">
       <div class="welcome-container">
         <h1 class="neon-title">
-          Pong Transcendence
+          ${i18next.t('welcome.title')}
         </h1>
         <p class="welcome-subtitle">
-          Challenge Your Friends in a Neon Pong Arena
+          ${i18next.t('welcome.subtitle')}
         </p>
         <div class="flex flex-col gap-4">
           <button id="registerButton" class="welcome-button">
-            Register
+            ${i18next.t('welcome.register')}
           </button>
           <button id="loginButton" class="welcome-button">
-            Login
+            ${i18next.t('welcome.login')}
           </button>
         </div>
       </div>
@@ -33,10 +37,22 @@ export function renderWelcomePage(onRegister: () => void, onLogin: () => void): 
 
 // Sets up event listeners for the welcome page buttons
 export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
-  const registerButton = document.getElementById("registerButton") as HTMLButtonElement;
-  const loginButton = document.getElementById("loginButton") as HTMLButtonElement;
-  registerButton.addEventListener("click", onRegister);
-  loginButton.addEventListener("click", onLogin);
+  setupLanguageSwitcherWithHandler(() => { window.location.reload(); });
+  let registerButton = document.getElementById("registerButton") as HTMLButtonElement;
+  let loginButton = document.getElementById("loginButton") as HTMLButtonElement;
+  // Remove old listeners by replacing with clone
+  if (registerButton) {
+    const newRegisterButton = registerButton.cloneNode(true) as HTMLButtonElement;
+    registerButton.parentNode?.replaceChild(newRegisterButton, registerButton);
+    registerButton = newRegisterButton;
+    registerButton.addEventListener("click", onRegister);
+  }
+  if (loginButton) {
+    const newLoginButton = loginButton.cloneNode(true) as HTMLButtonElement;
+    loginButton.parentNode?.replaceChild(newLoginButton, loginButton);
+    loginButton = newLoginButton;
+    loginButton.addEventListener("click", onLogin);
+  }
 }
 
 // ------------------------------------------
@@ -44,63 +60,70 @@ export function setupWelcomePage(onRegister: () => void, onLogin: () => void) {
 // ------------------------------------------
 // Renders the post-login welcome page with user info and game options
 export function renderLoggedInWelcomePage(
+  onLogout: () => void,
   username: string,
   email: string,
-  avatarUrl?: string
+  onPlayMatch: (mode: string) => void,
+  onPlayTournament: () => void,
+  onSettings: () => void,
 ): string {
-  const avatarSrc = avatarUrl || '';
   return `
     <div class="logged-in-container">
-      <button id="toggleSidebarButton" class="toggle-button">
-        Menu
+      <button id="menuButton" class="menu-button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
       </button>
       <div id="sidebar" class="sidebar">
         <img
-          src="${avatarSrc}"
+          src="${API_BASE_URL}/avatar/${encodeURIComponent(username)}"
           class="avatar"
-          ${avatarSrc ? '' : 'style="background-color: black;"'}
+          alt="${i18next.t('common.profile')}"
+          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
         />
         <h2 class="sidebar-username">${username}</h2>
         <p class="sidebar-email">${email}</p>
+        <div class="sidebar-friend-search">
+          <input type="text" id="friendSearchInput" class="form-input" placeholder="${i18next.t('postlogin.searchFriends')}" style="font-style: italic;" onfocus="this.style.fontStyle='normal'" onblur="if(!this.value)this.style.fontStyle='italic'" />
+        </div>
         <div class="sidebar-links">
-          <a id="settingsLink" class="sidebar-link">Settings</a>
-          <a class="sidebar-link">Leaderboard</a>
-          <a id="profileLink" class="sidebar-link">Profile</a>
-          <a id="logoutLink" class="sidebar-link">Logout</a>
+          <a id="settingsLink" class="sidebar-link">${i18next.t('postlogin.settings')}</a>
+          <a id="profileLink" class="sidebar-link">${i18next.t('postlogin.profile')}</a>
+          <a id="logoutLink" class="sidebar-link">${i18next.t('postlogin.logout')}</a>
         </div>
       </div>
       <div class="main-content">
         <h1 class="main-title">
-          Welcome, ${username}!
+          ${i18next.t('postlogin.welcome', { username })}
         </h1>
         <div class="flex flex-col gap-6">
           <button id="playTournamentButton" class="action-button">
-            Play Tournament
+            ${i18next.t('postlogin.playTournament')}
           </button>
           <div class="flex flex-col gap-2">
             <select id="gameModeSelect" class="action-button p-2 rounded-md">
-              <option value="standard">Standard Pong</option>
-              <option value="neonCity">Neon City Pong</option>
-              <option value="ai">AI Pong</option>
-              <option value="spaceBattle">Space Battle</option>
+              <option value="standard">${i18next.t('postlogin.standardPong')}</option>
+              <option value="neonCity">${i18next.t('postlogin.neonCityPong')}</option>
+              <option value="ai">${i18next.t('postlogin.aiPong')}</option>
+              <option value="spaceBattle">${i18next.t('postlogin.spaceBattle')}</option>
+              <option value="multiplayer">${i18next.t('postlogin.multiplayer')}</option>
             </select>
             <button id="playMatchButton" class="action-button">
-              Play Match
+              ${i18next.t('postlogin.playMatch')}
             </button>
           </div>
-          <button id="playMultiplayerButton" class="action-button">
-            Play Multiplayer
-          </button>
         </div>
         <div class="about-pong">
           <h2 class="about-title">
-            About Pong
+            ${i18next.t('postlogin.aboutPong')}
           </h2>
           <p class="mb-4">
-            Pong is a classic two-player game where each player controls a paddle to hit a ball back and forth. Use <strong>W</strong> and <strong>S</strong> keys for the left paddle, and <strong>Arrow Up</strong> and <strong>Arrow Down</strong> for the right. Score a point when your opponent misses the ball. The first to 3 points wins the match!
+            ${i18next.t('postlogin.aboutPongDesc1')}
           </p>
           <p>
-            Originating in 1972, Pong was created by Atari and is considered one of the first video games, sparking the arcade gaming revolution. Its simple yet addictive gameplay has made it a timeless icon in gaming history.
+            ${i18next.t('postlogin.aboutPongDesc2')}
           </p>
         </div>
       </div>
@@ -112,69 +135,201 @@ export function renderLoggedInWelcomePage(
 export function setupLoggedInWelcomePage(
   onLogout: () => void,
   username: string,
-  onPlayMatch: () => void,
+  onPlayMatch: (mode: string) => void,
   onPlayTournament: () => void,
   onSettings: () => void,
   navigate: (path: string) => void
 ) {
-  const logoutLink = document.getElementById("logoutLink");
-  const settingsLink = document.getElementById("settingsLink");
-  const profileLink = document.getElementById("profileLink");
-  const playMatchButton = document.getElementById("playMatchButton");
-  const playTournamentButton = document.getElementById("playTournamentButton");
-  const playMultiplayerButton = document.getElementById("playMultiplayerButton");
-  const gameModeSelect = document.getElementById("gameModeSelect");
-  const toggleSidebarButton = document.getElementById("toggleSidebarButton");
-  const sidebar = document.getElementById("sidebar");
+  setupLanguageSwitcherWithHandler(() => { window.location.reload(); });
+  let logoutLink = document.getElementById("logoutLink");
+  let settingsLink = document.getElementById("settingsLink");
+  let profileLink = document.getElementById("profileLink");
+  let playMatchButton = document.getElementById("playMatchButton");
+  let playTournamentButton = document.getElementById("playTournamentButton");
+  let gameModeSelect = document.getElementById("gameModeSelect");
 
+  // Remove old listeners by replacing with clone
   if (logoutLink) {
+    const newLogoutLink = logoutLink.cloneNode(true) as HTMLElement;
+    logoutLink.parentNode?.replaceChild(newLogoutLink, logoutLink);
+    logoutLink = newLogoutLink;
     logoutLink.addEventListener("click", (e) => {
       e.preventDefault();
       onLogout();
     });
   }
-
   if (settingsLink) {
+    const newSettingsLink = settingsLink.cloneNode(true) as HTMLElement;
+    settingsLink.parentNode?.replaceChild(newSettingsLink, settingsLink);
+    settingsLink = newSettingsLink;
     settingsLink.addEventListener("click", (e) => {
       e.preventDefault();
       onSettings();
     });
   }
-
   if (profileLink) {
+    const newProfileLink = profileLink.cloneNode(true) as HTMLElement;
+    profileLink.parentNode?.replaceChild(newProfileLink, profileLink);
+    profileLink = newProfileLink;
     profileLink.addEventListener("click", (e) => {
       e.preventDefault();
       navigate("/profile");
     });
   }
-
   if (playMatchButton && gameModeSelect) {
+    const newPlayMatchButton = playMatchButton.cloneNode(true) as HTMLElement;
+    playMatchButton.parentNode?.replaceChild(newPlayMatchButton, playMatchButton);
+    playMatchButton = newPlayMatchButton;
     playMatchButton.addEventListener("click", (e) => {
       e.preventDefault();
-      onPlayMatch();
+      const selectedMode = (gameModeSelect as HTMLSelectElement).value;
+      if (selectedMode === "multiplayer") {
+        navigate("/multiplayer");
+        return;
+      }
+      onPlayMatch(selectedMode);
     });
   }
-
   if (playTournamentButton) {
+    const newPlayTournamentButton = playTournamentButton.cloneNode(true) as HTMLElement;
+    playTournamentButton.parentNode?.replaceChild(newPlayTournamentButton, playTournamentButton);
+    playTournamentButton = newPlayTournamentButton;
     playTournamentButton.addEventListener("click", (e) => {
       e.preventDefault();
       onPlayTournament();
     });
   }
 
-  if (toggleSidebarButton && sidebar) {
-    toggleSidebarButton.addEventListener("click", () => {
-      sidebar.classList.toggle("visible");
-    });
+  // Friend search logic
+  const friendSearchInput = document.getElementById("friendSearchInput") as HTMLInputElement;
+  let friendSearchDropdown: HTMLDivElement | null = null;
+  // Helper to track if dropdown should stay open
+  let dropdownShouldStayOpen = false;
 
-    document.addEventListener("click", (e) => {
-      const target = e.target as Node;
-      if (
-        sidebar.classList.contains("visible") &&
-        !sidebar.contains(target) &&
-        !toggleSidebarButton.contains(target)
-      ) {
-        sidebar.classList.remove("visible");
+  if (friendSearchInput) {
+    // Remove any previous dropdown
+    const removeDropdown = () => {
+      if (friendSearchDropdown && friendSearchDropdown.parentElement) {
+        friendSearchDropdown.parentElement.removeChild(friendSearchDropdown);
+        friendSearchDropdown = null;
+      }
+      dropdownShouldStayOpen = false;
+    };
+
+    friendSearchInput.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && friendSearchInput.value.trim()) {
+        e.preventDefault();
+        removeDropdown();
+        const searchName = friendSearchInput.value.trim();
+        friendSearchInput.disabled = true;
+        try {
+          const sessionToken = localStorage.getItem("sessionToken");
+          const res = await fetch(`${API_BASE_URL}/users/search?name=${encodeURIComponent(searchName)}`, {
+            headers: sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}
+          });
+          const data = await res.json();
+          if (data && data.user && data.user.name !== username) {
+            // Show dropdown with Add Friend button
+            friendSearchDropdown = document.createElement("div");
+            friendSearchDropdown.className = "friend-search-dropdown";
+            friendSearchDropdown.style.position = "absolute";
+            friendSearchDropdown.style.background = "#222";
+            friendSearchDropdown.style.color = "#fff";
+            friendSearchDropdown.style.border = "1px solid #444";
+            friendSearchDropdown.style.zIndex = "1000";
+            friendSearchDropdown.style.left = friendSearchInput.offsetLeft + "px";
+            friendSearchDropdown.style.top = (friendSearchInput.offsetTop + friendSearchInput.offsetHeight) + "px";
+            friendSearchDropdown.style.width = friendSearchInput.offsetWidth + "px";
+            friendSearchDropdown.innerHTML = `
+              <div style="padding: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span>${data.user.name}</span>
+                <button id="addFriendBtn" class="form-button" style="margin-left: 8px;">${i18next.t('profile.friendActions.addFriend')}</button>
+              </div>
+            `;
+            friendSearchInput.parentElement!.appendChild(friendSearchDropdown);
+            dropdownShouldStayOpen = true;
+            const addFriendBtn = friendSearchDropdown.querySelector("#addFriendBtn") as HTMLButtonElement;
+            addFriendBtn.addEventListener("click", async () => {
+              addFriendBtn.disabled = true;
+              addFriendBtn.textContent = i18next.t('profile.friendActions.addingFriend');
+              try {
+                const addRes = await fetch(`${API_BASE_URL}/friends/add`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${sessionToken}`
+                  },
+                  body: JSON.stringify({ friendId: data.user.id })
+                });
+                const addData = await addRes.json();
+                if (addRes.ok && addData.status === "Friend added") {
+                  addFriendBtn.textContent = i18next.t('profile.friendActions.friendAdded');
+                  setTimeout(() => {
+                    removeDropdown();
+                    friendSearchInput.value = "";
+                  }, 1000);
+                } else if (addData.status === "Already friends") {
+                  addFriendBtn.textContent = i18next.t('profile.friendActions.alreadyFriends');
+                  setTimeout(removeDropdown, 2000);
+                } else {
+                  addFriendBtn.textContent = addData.error ? i18next.t('profile.friendActions.cannotAddSelf') : (addData.status || i18next.t('profile.friendActions.addFriend'));
+                  setTimeout(removeDropdown, 2000);
+                }
+              } catch (err) {
+                addFriendBtn.textContent = i18next.t('profile.friendActions.addFriend');
+                setTimeout(removeDropdown, 2000);
+              }
+            });
+          } else if (data && data.user && data.user.name === username) {
+            // Can't add yourself
+            friendSearchDropdown = document.createElement("div");
+            friendSearchDropdown.className = "friend-search-dropdown";
+            friendSearchDropdown.style.position = "absolute";
+            friendSearchDropdown.style.background = "#222";
+            friendSearchDropdown.style.color = "#fff";
+            friendSearchDropdown.style.border = "1px solid #444";
+            friendSearchDropdown.style.zIndex = "1000";
+            friendSearchDropdown.style.left = friendSearchInput.offsetLeft + "px";
+            friendSearchDropdown.style.top = (friendSearchInput.offsetTop + friendSearchInput.offsetHeight) + "px";
+            friendSearchDropdown.style.width = friendSearchInput.offsetWidth + "px";
+            friendSearchDropdown.innerHTML = `<div style="padding: 8px;">${i18next.t('profile.friendActions.cannotAddSelf')}</div>`;
+            friendSearchInput.parentElement!.appendChild(friendSearchDropdown);
+            dropdownShouldStayOpen = false;
+            setTimeout(removeDropdown, 2000);
+          } else {
+            // Not found
+            friendSearchDropdown = document.createElement("div");
+            friendSearchDropdown.className = "friend-search-dropdown";
+            friendSearchDropdown.style.position = "absolute";
+            friendSearchDropdown.style.background = "#222";
+            friendSearchDropdown.style.color = "#fff";
+            friendSearchDropdown.style.border = "1px solid #444";
+            friendSearchDropdown.style.zIndex = "1000";
+            friendSearchDropdown.style.left = friendSearchInput.offsetLeft + "px";
+            friendSearchDropdown.style.top = (friendSearchInput.offsetTop + friendSearchInput.offsetHeight) + "px";
+            friendSearchDropdown.style.width = friendSearchInput.offsetWidth + "px";
+            friendSearchDropdown.innerHTML = `<div style="padding: 8px;">${i18next.t('profile.friendActions.noUserFound')}</div>`;
+            friendSearchInput.parentElement!.appendChild(friendSearchDropdown);
+            dropdownShouldStayOpen = false;
+            setTimeout(removeDropdown, 2000);
+          }
+        } catch (err) {
+          removeDropdown();
+        } finally {
+          friendSearchInput.disabled = false;
+        }
+      }
+    });
+    // Remove dropdown on blur, but only if it shouldn't stay open
+    friendSearchInput.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (!dropdownShouldStayOpen) removeDropdown();
+      }, 200);
+    });
+    // Remove dropdown if clicking outside
+    document.addEventListener("mousedown", (e) => {
+      if (friendSearchDropdown && !friendSearchDropdown.contains(e.target as Node) && e.target !== friendSearchInput) {
+        removeDropdown();
       }
     });
   }
@@ -189,38 +344,38 @@ export function renderNameEntryForm(onSubmit: (player1: string, player2: string,
     <div class="full-screen-container">
       <form id="nameEntryForm" class="name-entry-form">
         <h2 class="form-title">
-          Enter Player Names
+          ${i18next.t('game.tournament.enterNames')}
         </h2>
         <input
           id="player1Input"
           type="text"
-          placeholder="Player 1 Name"
+          placeholder="${i18next.t('game.tournament.playerName', { number: 1 })}"
           class="form-input"
           required
         />
         <input
           id="player2Input"
           type="text"
-          placeholder="Player 2 Name"
+          placeholder="${i18next.t('game.tournament.playerName', { number: 2 })}"
           class="form-input"
           required
         />
         <input
           id="player3Input"
           type="text"
-          placeholder="Player 3 Name"
+          placeholder="${i18next.t('game.tournament.playerName', { number: 3 })}"
           class="form-input"
           required
         />
         <input
           id="player4Input"
           type="text"
-          placeholder="Player 4 Name"
+          placeholder="${i18next.t('game.tournament.playerName', { number: 4 })}"
           class="form-input"
           required
         />
         <button type="submit" class="form-button">
-          Start Tournament
+          ${i18next.t('game.tournament.startTournament')}
         </button>
       </form>
     </div>
@@ -257,7 +412,7 @@ export function setupNameForm(
       if (enteredNames.length === 4) {
         onSubmit(player1, player2, player3, player4);
       } else {
-        alert("Please enter names for exactly four players.");
+        alert(i18next.t('game.tournament.fourPlayersRequired'));
       }
     });
   } else {
@@ -270,18 +425,19 @@ export function setupNameForm(
 // ------------------------------------------
 // Renders the game view with player names and optional round number
 export function renderGameView(playerLeftName: string, playerRightName: string, roundNumber?: number): string {
-  const leftDisplayName = playerLeftName.trim() || "Player 1";
-  const rightDisplayName = playerRightName.trim() || "Player 2";
+  const leftDisplayName = playerLeftName.trim() || i18next.t('game.player1');
+  const rightDisplayName = playerRightName.trim() || i18next.t('game.player2');
   return `
     <div id="gameContainer" class="game-container">
       ${roundNumber !== undefined ? `
         <div class="tournament-round">
-          Tournament ${roundNumber === 0 ? 'Semifinals' : 'Final'}
+          ${i18next.t('game.round')}
+          ${roundNumber === 0 ? i18next.t('game.semifinals') : i18next.t('game.final')}
         </div>
       ` : ''}
       <div class="score-container">
-        <span><span id="playerLeftNameDisplay">${leftDisplayName}</span>: <span id="scoreLeft">0</span></span>
-        <span><span id="playerRightNameDisplay">${rightDisplayName}</span>: <span id="scoreRight">0</span></span>
+        <span>${i18next.t('common.scoreFormat', { name: `<span id="playerLeftNameDisplay">${leftDisplayName}</span>`, score: '<span id="scoreLeft">0</span>' })}</span>
+        <span>${i18next.t('common.scoreFormat', { name: `<span id="playerRightNameDisplay">${rightDisplayName}</span>`, score: '<span id="scoreRight">0</span>' })}</span>
       </div>
       <div class="game-area flex gap-5 items-start relative">
         <canvas id="pongCanvas" width="800" height="400" class="pong-canvas"></canvas>
@@ -289,24 +445,24 @@ export function renderGameView(playerLeftName: string, playerRightName: string, 
           <button id="settingsButton" class="settings-button"></button>
           <div id="settingsMenu" class="settings-menu">
             <div class="flex items-center gap-2">
-              <label for="backgroundColorSelect" class="text-white whitespace-nowrap">Color:</label>
+              <label for="backgroundColorSelect" class="text-white whitespace-nowrap">${i18next.t('game.settings.color')}</label>
               <select id="backgroundColorSelect" class="color-select">
-                <option value="#d8a8b5">Pastel Pink</option>
-                <option value="#b8b8d8">Soft Lavender</option>
-                <option value="#a8c8b5">Mint Green</option>
-                <option value="#a9c3d9">Baby Blue</option>
-                <option value="#d9c9a8">Cream</option>
+                <option value="#d8a8b5">${i18next.t('game.colors.pastelPink')}</option>
+                <option value="#b8b8d8">${i18next.t('game.colors.softLavender')}</option>
+                <option value="#a8c8b5">${i18next.t('game.colors.mintGreen')}</option>
+                <option value="#a9c3d9">${i18next.t('game.colors.babyBlue')}</option>
+                <option value="#d9c9a8">${i18next.t('game.colors.cream')}</option>
               </select>
             </div>
             <div class="flex items-center gap-2">
-              <label for="speedSlider" class="text-white">Target Speed:</label>
+              <label for="speedSlider" class="text-white">${i18next.t('game.settings.speed')}</label>
               <input type="range" id="speedSlider" min="1" max="10" value="5" class="speed-slider">
             </div>
           </div>
         </div>
         <div id="buttonContainer" class="button-container">
-          <button id="restartButton" class="game-control-button">Start</button>
-          <button id="backButton" class="game-control-button" style="display: none;">Back</button>
+          <button id="restartButton" class="game-control-button">${i18next.t('game.start')}</button>
+          <button id="backButton" class="game-control-button">${i18next.t('game.back')}</button>
         </div>
       </div>
     </div>
@@ -322,29 +478,30 @@ export function renderRegistrationForm(onSubmit: (username: string, email: strin
     <div class="full-screen-container">
       <div id="registrationFormContainer" class="registration-form-container">
         <h2 class="form-title-small">
-          Create Your Account
+          ${i18next.t('register.title')}
         </h2>
         <form id="registrationForm" class="flex flex-col gap-4">
           <div>
-            <label for="username" class="block text-white text-lg">Username:</label>
+            <label for="username" class="block text-white text-lg">${i18next.t('register.username')}:</label>
             <input type="text" id="username" class="form-input" required>
-            <p id="usernameError" class="error-message">Username must be 3-20 characters, alphanumeric only.</p>
+            <p id="usernameError" class="error-message">${i18next.t('register.errors.username')}</p>
           </div>
           <div>
-            <label for="email" class="block text-white text-lg">Email:</label>
+            <label for="email" class="block text-white text-lg">${i18next.t('register.email')}:</label>
             <input type="email" id="email" class="form-input" required>
-            <p id="emailError" class="error-message">Please enter a valid email address.</p>
+            <p id="emailError" class="error-message">${i18next.t('register.errors.email')}</p>
           </div>
           <div>
-            <label for="password" class="block text-white text-lg">Password:</label>
+            <label for="password" class="block text-white text-lg">${i18next.t('register.password')}:</label>
             <input type="password" id="password" class="form-input" required>
-            <p id="passwordError" class="error-message">Password must be at least 8 characters, including a number and a special character.</p>
+            <p id="passwordError" class="error-message">${i18next.t('register.errors.password')}</p>
           </div>
           <div>
-            <label for="avatar" class="block text-white text-lg">Avatar (Optional):</label>
-            <input type="file" id="avatar" accept="image/*" class="form-input">
+            <label for="avatar" class="block text-white text-lg">${i18next.t('register.avatar')}:</label>
+            <input type="file" id="avatar" class="form-input" accept="${i18next.t('common.acceptImageTypes')}">
+            <p id="avatarError" class="error-message">${i18next.t('register.errors.avatar')}</p>
           </div>
-          <button type="submit" class="form-button">Register</button>
+          <button type="submit" class="form-button">${i18next.t('register.submit')}</button>
         </form>
       </div>
     </div>
@@ -353,11 +510,22 @@ export function renderRegistrationForm(onSubmit: (username: string, email: strin
 
 // Sets up the registration form with validation
 export function setupRegistrationForm(onSubmit: (username: string, email: string, password: string, avatar?: File) => void) {
+  // Setup language switcher
+  setupLanguageSwitcherWithHandler(() => {
+    const container = document.getElementById('registrationFormContainer');
+    if (container) {
+      container.parentElement!.innerHTML = renderRegistrationForm(onSubmit);
+      setupRegistrationForm(onSubmit);
+    }
+  });
+
+  // Get form elements
   const form = document.getElementById("registrationForm") as HTMLFormElement;
   if (!form) {
     console.error("Registration form not found!");
     return;
   }
+
   const usernameInput = document.getElementById("username") as HTMLInputElement;
   const emailInput = document.getElementById("email") as HTMLInputElement;
   const passwordInput = document.getElementById("password") as HTMLInputElement;
@@ -365,6 +533,7 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
   const usernameError = document.getElementById("usernameError") as HTMLParagraphElement;
   const emailError = document.getElementById("emailError") as HTMLParagraphElement;
   const passwordError = document.getElementById("passwordError") as HTMLParagraphElement;
+  const avatarError = document.getElementById("avatarError") as HTMLParagraphElement;
 
   // Handle form submission with validation
   form.addEventListener("submit", (e) => {
@@ -394,7 +563,7 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
 
     // Validate password: 8+ characters, 1 number, 1 special character
     const password = passwordInput.value;
-    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
+    const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
     if (!passwordRegex.test(password)) {
       passwordError.classList.add("visible");
       isValid = false;
@@ -402,8 +571,22 @@ export function setupRegistrationForm(onSubmit: (username: string, email: string
       passwordError.classList.remove("visible");
     }
 
-    // Optional avatar
-    const avatar = avatarInput.files?.[0];
+    // Validate avatar if one was selected
+    let avatar: File | undefined;
+    if (avatarInput.files && avatarInput.files.length > 0) {
+      avatar = avatarInput.files[0];
+      if (!avatar.type.startsWith('image/')) {
+        avatarError.textContent = i18next.t('register.errors.avatarType');
+        avatarError.classList.add("visible");
+        isValid = false;
+      } else if (avatar.size > 2 * 1024 * 1024) { // 2MB
+        avatarError.textContent = i18next.t('register.errors.avatarSize');
+        avatarError.classList.add("visible");
+        isValid = false;
+      } else {
+        avatarError.classList.remove("visible");
+      }
+    }
 
     // Submit if valid
     if (isValid) {
@@ -428,24 +611,24 @@ export function renderLoginForm(onSubmit: (email: string, password: string) => v
     <div class="full-screen-container">
       <div id="loginFormContainer" class="login-form-container">
         <h2 class="form-title-small">
-          Login to Your Account
+          ${i18next.t('login.title')}
         </h2>
         <form id="loginForm" class="flex flex-col gap-4" autocomplete="off">
           <div>
-            <label for="email" class="block text-white text-lg">Email:</label>
+            <label for="email" class="block text-white text-lg">${i18next.t('login.email')}:</label>
             <input type="email" id="email" class="form-input" required autocomplete="off">
-            <p id="emailError" class="error-message">Please enter a valid email address.</p>
+            <p id="emailError" class="error-message">${i18next.t('login.errors.email')}</p>
           </div>
           <div>
-            <label for="password" class="block text-white text-lg">Password:</label>
+            <label for="password" class="block text-white text-lg">${i18next.t('login.password')}:</label>
             <input type="password" id="password" class="form-input" required autocomplete="off">
-            <p id="passwordError" class="error-message">Password is required.</p>
+            <p id="passwordError" class="error-message">${i18next.t('login.errors.password')}</p>
           </div>
-          <button type="submit" class="form-button">Login</button>
+          <button type="submit" class="form-button">${i18next.t('login.submit')}</button>
         </form>
         <p class="text-white mt-4">
-          Don't have an account? 
-          <a id="registerLink" class="form-link" href="/register">Create one here</a>.
+          ${i18next.t('login.noAccount')} 
+          <a id="registerLink" class="form-link" href="/register">${i18next.t('login.createAccount')}</a>.
         </p>
       </div>
     </div>
@@ -454,6 +637,7 @@ export function renderLoginForm(onSubmit: (email: string, password: string) => v
 
 // Sets up the login form with validation and register link
 export function setupLoginForm(onSubmit: (email: string, password: string) => void, onRegister: () => void) {
+  setupLanguageSwitcherWithHandler(() => { window.location.reload(); });
   const form = document.getElementById("loginForm") as HTMLFormElement;
   let registerLink = document.getElementById("registerLink") as HTMLAnchorElement;
 
@@ -545,17 +729,9 @@ export function setupLoginForm(onSubmit: (email: string, password: string) => vo
 export function renderTournamentEnd(winnerName: string): string {
   return `
     <div class="tournament-end-container">
-      <h1 class="tournament-winner">
-        ${winnerName} Wins!
-      </h1>
-      <div class="flex gap-4">
-        <button id="startAgainButton" class="tournament-end-button">
-          Start Again
-        </button>
-        <button id="backButton" class="tournament-end-button">
-          Back
-        </button>
-      </div>
+      <h1 class="tournament-winner">${i18next.t('game.tournament.complete')}</h1>
+      <h2 class="tournament-winner">${i18next.t('game.tournament.winner', { winnerName })}</h2>
+      <button id="backToMenuButton" class="tournament-end-button">${i18next.t('game.tournament.backToMenu')}</button>
     </div>
   `;
 }
@@ -593,35 +769,43 @@ export function renderSettingsPage(
   return `
     <div class="settings-page">
       <div class="settings-header">
-        <h1>Account Settings</h1>
-        <p>Manage your profile and preferences</p>
+        <img
+          src="${API_BASE_URL}/avatar/${encodeURIComponent(username)}"
+          class="profile-avatar"
+          alt="${i18next.t('common.profile')}"
+          onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
+        />
+        <div class="avatar-upload">
+          <input type="file" id="avatar" accept="${i18next.t('common.acceptImageTypes')}" />
+          <p class="input-hint">${i18next.t('settings.avatarHint')}</p>
+        </div>
       </div>
       
       <div class="settings-content">
         <div class="settings-section">
-          <h2>Profile Information</h2>
+          <h2>${i18next.t('settings.profile')}</h2>
           <div class="settings-option">
-            <label for="username">Username</label>
-            <input type="text" id="username" class="text-input" value="${username || ''}" />
+            <label for="username">${i18next.t('settings.username')}</label>
+            <input type="text" id="username" class="text-input" value="${escapeHtml(username || '')}" />
           </div>
           <div class="settings-option">
-            <label for="email">Email Address</label>
-            <input type="email" id="email" class="text-input" value="${email || ''}" />
+            <label for="email">${i18next.t('settings.email')}</label>
+            <input type="email" id="email" class="text-input" value="${escapeHtml(email || '')}" />
           </div>
         </div>
 
         <div class="settings-section">
-          <h2>Security</h2>
+          <h2>${i18next.t('settings.security')}</h2>
           <div class="settings-option">
-            <label for="currentPassword">Current Password</label>
+            <label for="currentPassword">${i18next.t('settings.currentPassword')}</label>
             <input type="password" id="currentPassword" class="text-input" />
           </div>
           <div class="settings-option">
-            <label for="newPassword">New Password</label>
+            <label for="newPassword">${i18next.t('settings.newPassword')}</label>
             <input type="password" id="newPassword" class="text-input" />
           </div>
           <div class="settings-option">
-            <label for="confirmPassword">Confirm New Password</label>
+            <label for="confirmPassword">${i18next.t('settings.confirmPassword')}</label>
             <input type="password" id="confirmPassword" class="text-input" />
           </div>
         </div>
@@ -629,8 +813,8 @@ export function renderSettingsPage(
         <div id="settingsError" class="settings-error"></div>
 
         <div class="settings-actions">
-          <button id="backButton" class="secondary-button">Back</button>
-          <button id="saveButton" class="primary-button">Save Changes</button>
+          <button id="backButton" class="secondary-button">${i18next.t('settings.back')}</button>
+          <button id="saveButton" class="primary-button">${i18next.t('settings.save')}</button>
         </div>
       </div>
     </div>
@@ -639,7 +823,8 @@ export function renderSettingsPage(
 
 export function setupSettingsPage(
   onSave: (updates: { username?: string; email?: string; currentPassword?: string; newPassword?: string }) => void,
-  onBack: () => void
+  onBack: () => void,
+  statsManager: StatsManager
 ): void {
   const usernameInput = document.getElementById("username") as HTMLInputElement;
   const emailInput = document.getElementById("email") as HTMLInputElement;
@@ -650,15 +835,24 @@ export function setupSettingsPage(
   const backButton = document.getElementById("backButton");
   const errorDiv = document.getElementById("settingsError");
 
+  const currentUser = statsManager.getCurrentUser();
+  if (!currentUser) return;
+
   if (saveButton) {
-    saveButton.addEventListener("click", () => {
+    saveButton.addEventListener("click", async () => {
       // Clear previous error
       if (errorDiv) errorDiv.textContent = "";
 
       const updates: { username?: string; email?: string; currentPassword?: string; newPassword?: string } = {};
       let hasChanges = false;
 
-      // Collect changes
+      // Check for avatar changes
+      const avatarInput = document.getElementById('avatar') as HTMLInputElement;
+      if (avatarInput && avatarInput.files && avatarInput.files.length > 0) {
+        hasChanges = true;
+      }
+
+      // Collect profile changes
       if (usernameInput && usernameInput.value.trim() !== usernameInput.defaultValue) {
         updates.username = usernameInput.value.trim();
         hasChanges = true;
@@ -669,7 +863,7 @@ export function setupSettingsPage(
         hasChanges = true;
       }
 
-      // Handle password change
+      // Only validate password if both current and new password fields are intentionally filled
       if (currentPasswordInput?.value && newPasswordInput?.value) {
         if (newPasswordInput.value.length < 8) {
           if (errorDiv) errorDiv.textContent = "New password must be at least 8 characters long";
@@ -684,9 +878,6 @@ export function setupSettingsPage(
         updates.currentPassword = currentPasswordInput.value;
         updates.newPassword = newPasswordInput.value;
         hasChanges = true;
-      } else if (currentPasswordInput?.value || newPasswordInput?.value || confirmPasswordInput?.value) {
-        if (errorDiv) errorDiv.textContent = "Please fill in all password fields to change password";
-        return;
       }
 
       if (!hasChanges) {
@@ -712,11 +903,21 @@ export function setupSettingsPage(
 export function renderProfilePage(
   username: string,
   email: string,
-  avatarUrl: string | undefined,
   playerStats: PlayerStats,
   matchHistory: MatchRecord[],
-  gameStats: Record<string, GameStats>
+  gameStats: Record<string, GameStats>,
+  friends: { id: number, name: string, online: boolean }[],
+  showOnlineStatus: boolean = true
 ): string {
+  // Map backend game type names to translation keys
+  const gameTypeKeyMap: Record<string, string> = {
+    'Pong': 'standardPong',
+    'Neon City Pong': 'neonCityPong',
+    'AI Pong': 'aiPong',
+    'Space Battle': 'spaceBattle',
+    'Online Pong': 'onlinePong',
+  };
+
   // Calculate total games and win rate from all game types combined
   let totalWins = 0;
   let totalLosses = 0;
@@ -730,72 +931,94 @@ export function renderProfilePage(
     ? ((totalWins / totalGames) * 100).toFixed(1)
     : "0.0";
 
-  // Get the last 5 matches
-  const recentMatches = matchHistory.slice(0, 5);
-
   return `
     <div class="profile-page">
+      <div class="profile-actions">
+        <button id="backButton" class="secondary-button">${i18next.t('profile.back')}</button>
+      </div>
       <div class="profile-header" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
         <div class="profile-user-info">
           <img
-            src="${avatarUrl || '/assets/default-avatar.png'}"
+            src="${API_BASE_URL}/avatar/${encodeURIComponent(username)}"
             class="profile-avatar"
+            alt="${i18next.t('common.profile')}"
+            onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI4MCIgcj0iNTAiIGZpbGw9IiNmNGMyYzIiLz48cGF0aCBkPSJNMzAgMTgwYzAtNDAgNjAtNzAgMTQwLTcwczE0MCAzMCAxNDAgNzBIMzB6IiBmaWxsPSIjZjRjMmMyIi8+PC9zdmc+'; this.onerror=null;"
           />
           <div class="profile-text-info">
-            <h1 class="profile-username">${username}</h1>
-            <p class="profile-email">${email}</p>
+            <h2 class="profile-username">${escapeHtml(username)}</h2>
+            <p class="profile-email">${escapeHtml(email)}</p>
           </div>
         </div>
         <div class="profile-quick-stats">
           <div class="quick-stat">
             <span class="stat-value">${winRate}%</span>
-            <span class="stat-label">Overall Win Rate</span>
+            <span class="stat-label">${i18next.t('profile.overallWinRate')}</span>
           </div>
           <div class="quick-stat">
             <span class="stat-value">${playerStats.tournamentsWon}</span>
-            <span class="stat-label">Tournaments Won</span>
+            <span class="stat-label">${i18next.t('profile.tournamentsWon')}</span>
           </div>
           <div class="quick-stat">
             <span class="stat-value">${totalGames}</span>
-            <span class="stat-label">Total Games</span>
+            <span class="stat-label">${i18next.t('profile.totalGames')}</span>
           </div>
         </div>
       </div>
 
       <div class="profile-content">
         <div class="profile-section game-stats-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
-          <h2>Current Session Statistics</h2>
+          <h2>${i18next.t('profile.currentSessionStats')}</h2>
           <div class="game-stats-grid">
-            ${Object.entries(gameStats).map(([gameType, stats]) => `
-              <div class="game-type-stats">
-                <h3>${gameType}</h3>
-                <canvas id="${gameType.replace(/\s+/g, '-').toLowerCase()}-chart" width="200" height="250"></canvas>
-                <div class="game-type-details">
-                  <p>Games Played: ${stats.gamesPlayed}</p>
-                  <p>Wins: ${stats.wins}</p>
-                  <p>Losses: ${stats.losses}</p>
+            ${Object.entries(gameStats).map(([gameType, stats]) => {
+              const key = gameTypeKeyMap[gameType] || gameType.toLowerCase().replace(/\s+/g, '');
+              const translated = i18next.t(`profile.gameTypes.${key}`);
+              const displayName = translated.startsWith('profile.gameTypes.') ? gameType : translated;
+              return `
+                <div class="game-type-stats">
+                  <h3>${escapeHtml(displayName)}</h3>
+                  <canvas id="${gameType.replace(/\s+/g, '-').toLowerCase()}-chart" width="200" height="250"></canvas>
+                  <div class="game-type-details">
+                    <p>${i18next.t('profile.gamesPlayed')}: ${stats.gamesPlayed}</p>
+                    <p>${i18next.t('profile.wins')}: ${stats.wins}</p>
+                    <p>${i18next.t('profile.losses')}: ${stats.losses}</p>
+                  </div>
                 </div>
-              </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>
 
-        <div class="profile-section match-history-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
-          <h2>Recent Matches</h2>
-          <div class="match-history-list">
-            ${recentMatches.length > 0 ? recentMatches.map(match => `
-              <div class="match-history-item ${match.winner === username ? 'victory' : 'defeat'}">
-                <div class="match-result">${match.winner === username ? 'Victory' : 'Defeat'}</div>
-                <div class="match-players">
-                  <span class="${match.winner === username ? 'winner' : 'loser'}">${username}</span>
-                  <span class="vs">vs</span>
-                  <span class="${match.winner === username ? 'loser' : 'winner'}">${match.winner === username ? match.loser : match.winner}</span>
-                </div>
-                <div class="match-date">${new Date(match.timestamp).toLocaleDateString()}</div>
-              </div>
-            `).join('') : `
-              <div class="no-matches">No recent matches found</div>
-            `}
+        <div class="profile-section friends-section" style="background-color: rgba(0, 0, 0, 0.5); border: 2px solid #f4c2c2; border-radius: 12px; box-shadow: 0 0 15px rgba(244, 194, 194, 0.5);">
+          <h2>${i18next.t('profile.friends')}</h2>
+          <div class="friends-list">
+            ${friends && friends.length > 0
+              ? renderFriendList(friends, showOnlineStatus)
+              : `<div class="no-friends">${i18next.t('profile.noFriends')}</div>`}
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <h2>${i18next.t('profile.matchHistory')}</h2>
+          <div class="match-history-scroll">
+            <ul class="match-history-list">
+              ${matchHistory.length === 0
+                ? `<li class="no-matches">${i18next.t('profile.noMatches')}</li>`
+                : matchHistory
+                    .map(
+                      (match) => `
+                        <li class="match-history-item ${match.winner === username ? 'victory' : 'defeat'}">
+                          <div class="match-result">${match.winner === username ? i18next.t('profile.victory') : i18next.t('profile.defeat')}</div>
+                          <div class="match-players">
+                            <span class="winner">${escapeHtml(match.winner)}</span>
+                            <span class="vs">${i18next.t('profile.vs')}</span>
+                            <span class="loser">${escapeHtml(match.loser)}</span>
+                          </div>
+                          <div class="match-date">${i18next.t('common.dateFormat', { date: new Date(match.timestamp).toLocaleString() })}</div>
+                        </li>
+                      `
+                    )
+                    .join('')}
+            </ul>
           </div>
         </div>
       </div>
@@ -804,9 +1027,7 @@ export function renderProfilePage(
 }
 
 function setupGameChart(canvas: HTMLCanvasElement, gameType: string): void {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
+  const ctx = canvas.getContext('2d')!;
   // Get game stats from the canvas's parent element
   const statsContainer = canvas.closest('.game-type-stats');
   if (!statsContainer) return;
@@ -839,27 +1060,235 @@ function setupGameChart(canvas: HTMLCanvasElement, gameType: string): void {
   ctx.lineTo(100, 100);
   ctx.fill();
 
-  // Add only the game type name
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 16px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText(gameType, 100, 210);
+  // Removed game type label under the chart for cleaner look
 }
 
-export function setupProfilePage(onBack: () => void): void {
-  // Add event listener for back button if it exists
-  const backButton = document.getElementById("backButton");
+export function setupProfilePage(onBack: () => void, navigate: (path: string) => void): void {
+  const backButton = document.getElementById("backButton") as HTMLButtonElement;
   if (backButton) {
-    backButton.addEventListener("click", onBack);
+    backButton.style.display = "block";
+    backButton.onclick = onBack;
   }
 
-  // Setup charts for each game type
-  const gameTypes = ["Pong", "Neon City Pong", "AI Pong", "Space Battle"];
-  gameTypes.forEach(gameType => {
-    const canvasId = `${gameType.replace(/\s+/g, '-').toLowerCase()}-chart`;
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    if (canvas) {
-      setupGameChart(canvas, gameType);
-    }
+  // Add click handlers for friend items
+  const friendItems = document.querySelectorAll('.friend-item');
+  friendItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const friendId = item.getAttribute('data-friend-id');
+      if (friendId) {
+        window.location.href = `/profile/${friendId}`;
+      }
+    });
   });
+
+  // Setup charts for each game type
+  // Dynamically find all chart canvases and set up their charts, including Online Pong
+  const chartCanvases = document.querySelectorAll(".game-type-stats canvas");
+  chartCanvases.forEach((canvas) => {
+    const id = canvas.id;
+    // Extract game type from id
+    let gameType = id.replace(/-chart$/, '').replace(/-/g, ' ');
+    // Capitalize each word
+    gameType = gameType.replace(/\b\w/g, c => c.toUpperCase());
+    if (gameType === 'Online Pong') gameType = 'Online Pong';
+    setupGameChart(canvas as HTMLCanvasElement, gameType);
+  });
+}
+
+// Renders the multiplayer menu with matchmaking and invite options
+export function renderMultiplayerMenu(): string {
+  return `
+    <div class="full-screen-container">
+      <div class="welcome-container">
+        <h1 class="neon-title">
+          ${i18next.t('game.multiplayer.title')}
+        </h1>
+        <p class="welcome-subtitle">
+          ${i18next.t('game.multiplayer.subtitle')}
+        </p>
+        <div class="flex flex-col gap-4">
+          <label for="multiplayerGameTypeSelect" style="color:white;font-weight:bold;">${i18next.t('game.multiplayer.gameType')}</label>
+          <select id="multiplayerGameTypeSelect" class="welcome-button" style="color:black;">
+            <option value="pong">${i18next.t('game.multiplayer.gameTypes.pong')}</option>
+            <option value="spaceBattle">${i18next.t('game.multiplayer.gameTypes.spaceBattle')}</option>
+          </select>
+          <button id="matchmakingButton" class="welcome-button">
+            ${i18next.t('game.multiplayer.matchmaking')}
+          </button>
+          <button id="backButton" class="welcome-button">
+            ${i18next.t('game.back')}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Sets up event listeners for the multiplayer menu
+export function setupMultiplayerMenu(navigate: (path: string) => void): void {
+  const matchmakingButton = document.getElementById("matchmakingButton");
+  const backButton = document.getElementById("backButton");
+  const gameTypeSelect = document.getElementById("multiplayerGameTypeSelect") as HTMLSelectElement;
+
+  if (matchmakingButton) {
+    matchmakingButton.addEventListener("click", async () => {
+      // Store selected game type in sessionStorage
+      if (gameTypeSelect) {
+        sessionStorage.setItem("multiplayerGameType", gameTypeSelect.value);
+      } else {
+        sessionStorage.setItem("multiplayerGameType", "pong");
+      }
+      // Start matchmaking
+      const sessionToken = localStorage.getItem("sessionToken");
+      if (!sessionToken) {
+        alert("You must be logged in to play multiplayer.");
+        navigate("/login");
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/matchmaking/join`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${sessionToken}` },
+        });
+        if (!response.ok) {
+          throw new Error("Failed to join matchmaking");
+        }
+        const data = await response.json();
+        const app = document.getElementById("app");
+        if (app) app.innerHTML = renderWaitingForOpponent();
+        let polling = true;
+        setupWaitingForOpponent(() => {
+          polling = false;
+          const sessionToken = localStorage.getItem("sessionToken");
+          if (sessionToken) {
+            fetch(`${API_BASE_URL}/matchmaking/leave`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${sessionToken}` },
+            }).catch(error => console.error("Error leaving matchmaking:", error));
+          }
+          navigate("/multiplayer");
+        });
+        if (data.status === "ready" && data.matchId) {
+          navigate(`/multiplayerGame/${data.matchId}`);
+          return;
+        }
+        const userId = data.userId;
+        if (!userId) {
+          throw new Error("No user ID received from matchmaking");
+        }
+        const poll = async () => {
+          if (!polling) return;
+          try {
+            const statusRes = await fetch(`${API_BASE_URL}/matchmaking/status/${userId}`, {
+              headers: { "Authorization": `Bearer ${sessionToken}` },
+            });
+            if (!statusRes.ok) {
+              throw new Error("Failed to get matchmaking status");
+            }
+            const status = await statusRes.json();
+            if (status.status === "ready" && status.matchId) {
+              navigate(`/multiplayerGame/${status.matchId}`);
+            } else {
+              setTimeout(poll, 2000);
+            }
+          } catch (error) {
+            console.error("Error polling matchmaking status:", error);
+            polling = false;
+            navigate("/multiplayer");
+          }
+        };
+        poll();
+      } catch (error) {
+        console.error("Matchmaking error:", error);
+        alert("Failed to join matchmaking. Please try again.");
+        navigate("/multiplayer");
+      }
+    });
+  }
+  if (backButton) {
+    backButton.addEventListener("click", () => {
+      navigate("/");
+    });
+  }
+}
+
+// Renders the waiting for opponent UI
+export function renderWaitingForOpponent(): string {
+  return `
+    <div class="full-screen-container">
+      <div class="welcome-container">
+        <h1 class="neon-title">${i18next.t('game.waitingForOpponent')}</h1>
+        <p class="welcome-subtitle">${i18next.t('game.opponentJoining')}</p>
+        <div class="flex flex-col gap-4">
+          <button id="cancelMatchmakingButton" class="welcome-button">${i18next.t('game.cancel')}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function setupWaitingForOpponent(onCancel: () => void) {
+  const cancelButton = document.getElementById("cancelMatchmakingButton");
+  if (cancelButton) {
+    cancelButton.addEventListener("click", onCancel);
+  }
+}
+
+export function escapeHtml(str: string): string {
+  // Check if the string contains any HTML tags or script tags
+  if (/<[^>]*>|<\/[^>]*>|javascript:|on\w+\s*=/.test(str)) {
+    return "Nice try! 😄";
+  }
+  return String(str).replace(/[&<>'"]/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[c]!));
+}
+
+export function renderFriendList(friends: { id: number, name: string, online: boolean }[], showOnlineStatus: boolean = true): string {
+  return `
+    <div class="friends-list">
+      ${friends.length === 0
+        ? `<div class="no-friends">${i18next.t('profile.noFriends')}</div>`
+        : friends
+            .map(
+              (friend) => `
+                <div class="friend-item" style="display: flex; align-items: center; gap: 8px; background: rgba(255,192,203,0.08); border-radius: 8px; padding: 6px 12px; margin-bottom: 6px; cursor: pointer;" data-friend-id="${friend.id}">
+                  ${showOnlineStatus ? `<span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${friend.online ? '#4CAF50' : '#f44336'}; margin-right: 8px;"></span>` : ''}
+                  <span class="friend-name" style="color: #fff; font-weight: 500;">${escapeHtml(friend.name)}</span>
+                </div>
+              `
+            )
+            .join('')}
+    </div>
+  `;
+}
+
+export function renderAddFriendButton(username: string, isFriend: boolean, isAdding: boolean): string {
+  if (isFriend) {
+    return `<button class="friend-button" disabled>${i18next.t('profile.friendActions.alreadyFriends')}</button>`;
+  }
+  if (isAdding) {
+    return `<button class="friend-button" disabled>${i18next.t('profile.friendActions.adding')}</button>`;
+  }
+  return `<button class="friend-button" data-username="${escapeHtml(username)}">${i18next.t('profile.friendActions.addFriend')}</button>`;
+}
+
+export function showFriendError(message: string): void {
+  let translatedMessage = message;
+  switch (message) {
+    case "You can't add yourself as a friend":
+      translatedMessage = i18next.t('profile.friendActions.cantAddSelf');
+      break;
+    case "User not found":
+      translatedMessage = i18next.t('profile.friendActions.userNotFound');
+      break;
+    case "Already friends":
+      translatedMessage = i18next.t('profile.friendActions.alreadyFriends');
+      break;
+  }
+  showError(translatedMessage);
 }

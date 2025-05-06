@@ -1,68 +1,72 @@
 import { StatsManager } from "./stats.js";
+import i18next from "./i18n/config.js";
 
 // Manages the core game logic for Pong Transcendence
 export class PongGame {
   // Canvas and context for rendering
-  protected canvas: HTMLCanvasElement;
-  protected ctx: CanvasRenderingContext2D;
+  public canvas: HTMLCanvasElement;
+  public ctx: CanvasRenderingContext2D;
   // UI elements for game settings and scores
-  protected speedSlider: HTMLInputElement;
-  protected backgroundColorSelect: HTMLSelectElement | null;
-  protected scoreLeftElement: HTMLSpanElement;
-  protected scoreRightElement: HTMLSpanElement;
-  protected restartButton: HTMLButtonElement;
-  protected settingsButton: HTMLButtonElement;
-  protected settingsMenu: HTMLDivElement;
-  protected settingsContainer: HTMLDivElement;
+  public speedSlider: HTMLInputElement;
+  public backgroundColorSelect: HTMLSelectElement | null;
+  public scoreLeftElement: HTMLSpanElement;
+  public scoreRightElement: HTMLSpanElement;
+  public restartButton: HTMLButtonElement;
+  public settingsButton: HTMLButtonElement;
+  public settingsMenu: HTMLDivElement;
+  public settingsContainer: HTMLDivElement;
   // Manages game statistics
-  protected statsManager: StatsManager;
+  public statsManager: StatsManager;
   // User name for settings persistence
-  protected userName: string | null;
+  public userName: string | null;
   // Navigation callback
-  protected navigate: (path: string) => void;
+  public navigate: (path: string) => void;
 
   // Game state variables
-  protected paddleLeftY: number = 160;
-  protected paddleRightY: number = 160;
-  protected ballX: number = 400;
-  protected ballY: number = 200;
-  protected ballSpeedX: number = 6.0;
-  protected ballSpeedY: number = 4.1;
-  protected scoreLeft: number = 0;
-  protected scoreRight: number = 0;
-  protected gameOver: boolean = false;
-  protected gameStarted: boolean = false;
-  protected isPaused: boolean = false;
-  protected playerLeftName: string;
-  protected playerRightName: string;
-  protected backgroundColor: string = "#d8a8b5";
-  protected onGameEnd?: (winnerName: string) => void;
+  public paddleLeftY: number = 160;
+  public paddleRightY: number = 160;
+  public ballX: number = 400;
+  public ballY: number = 200;
+  public ballSpeedX: number = 6.0;
+  public ballSpeedY: number = 4.1;
+  public scoreLeft: number = 0;
+  public scoreRight: number = 0;
+  public gameOver: boolean = false;
+  public gameStarted: boolean = false;
+  public isPaused: boolean = false;
+  public playerLeftName: string;
+  public playerRightName: string;
+  public backgroundColor: string = "#d8a8b5";
+  public onGameEnd?: (winnerName: string) => void;
 
-  // Tournament mode flag
-  protected isTournamentMode: boolean;
+  protected countdown: number = 0;
+  protected countdownStartTime: number = 0;
+  protected isCountingDown: boolean = false;
+
+  public isTournamentMode: boolean;
 
   // Flag to prevent multiple onGameEnd triggers
-  protected hasTriggeredGameEnd: boolean = false;
+  public hasTriggeredGameEnd: boolean = false;
 
   // Game constants
-  protected paddleSpeed: number = 5;
-  protected keys: Record<"w" | "s" | "ArrowUp" | "ArrowDown", boolean> = {
+  public paddleSpeed: number = 5;
+  public keys: Record<"w" | "s" | "ArrowUp" | "ArrowDown", boolean> = {
     w: false,
     s: false,
     ArrowUp: false,
     ArrowDown: false,
   };
   // Base ball speeds
-  protected baseBallSpeedX: number = 6.0;
-  protected baseBallSpeedY: number = 4.1;
+  public baseBallSpeedX: number = 6.0;
+  public baseBallSpeedY: number = 4.1;
 
   // Canvas dimensions and scaling
-  protected baseWidth: number = 800;
-  protected baseHeight: number = 400;
-  protected scale: number = 1;
+  public baseWidth: number = 800;
+  public baseHeight: number = 400;
+  public scale: number = 1;
 
   // Timing for delta-time calculation
-  protected lastTime: number = 0; // Stores timestamp of last frame
+  public lastTime: number = 0; // Stores timestamp of last frame
 
   // Initializes the game with player names and UI element IDs
   constructor(
@@ -125,7 +129,7 @@ export class PongGame {
   }
 
   // Computes the speed multiplier based on the speed slider
-  protected getSpeedMultiplier(): number {
+  public getSpeedMultiplier(): number {
     return parseInt(this.speedSlider.value) / 5; // Default slider value of 5 gives multiplier of 1
   }
 
@@ -168,6 +172,10 @@ export class PongGame {
       if (this.userName) {
         this.statsManager.setUserSettings(this.userName, { ballSpeed: parseInt(this.speedSlider.value) });
       }
+      // Apply speed change immediately
+      const speedMultiplier = this.getSpeedMultiplier();
+      this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier * Math.sign(this.ballSpeedX);
+      this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * Math.sign(this.ballSpeedY);
     });
 
     // Background color selector
@@ -195,24 +203,12 @@ export class PongGame {
       }
     });
 
-    // Start/Restart button
+    // Start button
     this.restartButton.addEventListener("click", () => {
       if (!this.gameStarted) {
-        this.gameStarted = true;
-        this.restartButton.style.display = "none";
+        this.startCountdown();
       } else {
-        this.scoreLeft = 0;
-        this.scoreRight = 0;
-        this.scoreLeftElement.textContent = "0";
-        this.scoreRightElement.textContent = "0";
-        this.gameOver = false;
-        this.hasTriggeredGameEnd = false;
-        this.ballX = (this.baseWidth / 2) * this.scale;
-        this.ballY = (this.baseHeight / 2) * this.scale;
-        const speedMultiplier = this.getSpeedMultiplier();
-        this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
-        this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
-        this.restartButton.style.display = "none";
+        this.resetGame();
       }
     });
 
@@ -233,8 +229,39 @@ export class PongGame {
     });
   }
 
+  // Start the countdown before game begins
+  protected startCountdown(): void {
+    this.countdown = 3;
+    this.countdownStartTime = performance.now();
+    this.isCountingDown = true;
+    this.gameStarted = false;
+    this.gameOver = false;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.scoreLeftElement.textContent = "0";
+    this.scoreRightElement.textContent = "0";
+    this.restartButton.style.display = "none";
+  }
+
+  // Reset the game state
+  private resetGame(): void {
+    this.gameStarted = true;
+    this.isPaused = false;
+    this.gameOver = false;
+    this.scoreLeft = 0;
+    this.scoreRight = 0;
+    this.scoreLeftElement.textContent = "0";
+    this.scoreRightElement.textContent = "0";
+    this.ballX = (this.baseWidth / 2) * this.scale;
+    this.ballY = (this.baseHeight / 2) * this.scale;
+    const speedMultiplier = this.getSpeedMultiplier();
+    this.ballSpeedX = this.baseBallSpeedX * this.scale * speedMultiplier;
+    this.ballSpeedY = this.baseBallSpeedY * this.scale * speedMultiplier * (Math.random() > 0.5 ? 1 : -1);
+    this.restartButton.style.display = "none";
+  }
+
   // Renders the game and updates game state
-  protected draw(timestamp: number = performance.now()) {
+  public draw(timestamp: number = performance.now()) {
     // Calculate delta time (in seconds)
     const deltaTime = (timestamp - this.lastTime) / 1000; // Convert ms to seconds
     this.lastTime = timestamp;
@@ -252,6 +279,36 @@ export class PongGame {
     this.ctx.fillRect(10 * this.scale, this.paddleLeftY, 20 * this.scale, 80 * this.scale);
     this.ctx.fillRect((this.baseWidth - 30) * this.scale, this.paddleRightY, 20 * this.scale, 80 * this.scale);
 
+    // Handle countdown
+    if (this.isCountingDown) {
+      const elapsed = (timestamp - this.countdownStartTime) / 1000;
+      if (elapsed >= 1) {
+        this.countdown--;
+        this.countdownStartTime = timestamp;
+        if (this.countdown <= 0) {
+          this.isCountingDown = false;
+          this.resetGame();
+        }
+      }
+
+      // Draw countdown
+      this.ctx.font = `bold ${100 * this.scale}px 'Verdana', sans-serif`;
+      this.ctx.fillStyle = "white";
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "middle";
+      this.ctx.shadowColor = "rgba(0, 0, 255, 0.5)";
+      this.ctx.shadowBlur = 10 * this.scale;
+      this.ctx.shadowOffsetX = 0;
+      this.ctx.shadowOffsetY = 0;
+      this.ctx.fillText(
+        this.countdown.toString(),
+        this.canvas.width / 2,
+        this.canvas.height / 2
+      );
+      this.ctx.shadowColor = "transparent";
+      this.ctx.shadowBlur = 0;
+    }
+
     // Update game state if not paused or over
     if (this.gameStarted && !this.isPaused && !this.gameOver) {
       // Move paddles based on key input, scaled by deltaTime
@@ -268,13 +325,20 @@ export class PongGame {
         this.paddleRightY += this.paddleSpeed * deltaTimeFactor;
       }
 
-      // Update ball position (only for player1 in multiplayer mode)
+      // Update ball position
       this.ballX += this.ballSpeedX * deltaTimeFactor;
       this.ballY += this.ballSpeedY * deltaTimeFactor;
 
-      // Bounce off top and bottom walls
-      if (this.ballY <= 10 * this.scale || this.ballY >= this.canvas.height - 10 * this.scale) {
-        this.ballSpeedY = -this.ballSpeedY;
+      // Bounce off top and bottom walls with proper collision handling
+      const ballRadius = 10 * this.scale;
+      if (this.ballY - ballRadius <= 0) {
+        // Top wall collision
+        this.ballY = ballRadius; // Place ball at top boundary
+        this.ballSpeedY = Math.abs(this.ballSpeedY); // Ensure downward movement
+      } else if (this.ballY + ballRadius >= this.canvas.height) {
+        // Bottom wall collision
+        this.ballY = this.canvas.height - ballRadius; // Place ball at bottom boundary
+        this.ballSpeedY = -Math.abs(this.ballSpeedY); // Ensure upward movement
       }
 
       // Handle left paddle collision
@@ -310,8 +374,6 @@ export class PongGame {
         if (this.scoreRight >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
           if (!this.isTournamentMode) { // Only record match if not in tournament mode
             this.statsManager.recordMatch(this.playerRightName, this.playerLeftName, "Pong", {
               player1Score: this.scoreLeft,
@@ -337,8 +399,7 @@ export class PongGame {
         if (this.scoreLeft >= 3) {
           this.gameOver = true;
           this.restartButton.style.display = "block";
-          const backButton = document.getElementById("backButton") as HTMLButtonElement;
-          if (backButton) backButton.style.display = "block";
+          
           if (!this.isTournamentMode) { // Only record match if not in tournament mode
             this.statsManager.recordMatch(this.playerLeftName, this.playerRightName, "Pong", {
               player1Score: this.scoreLeft,
@@ -346,6 +407,7 @@ export class PongGame {
               sessionToken: localStorage.getItem("sessionToken")
             });
           }
+
           if (this.onGameEnd && !this.hasTriggeredGameEnd) {
             this.hasTriggeredGameEnd = true; // Prevent multiple triggers
             this.onGameEnd(this.playerLeftName);
@@ -361,7 +423,7 @@ export class PongGame {
       }
     }
 
-    // Draw ball (even for Player 2, since it receives ball position updates)
+    // Draw ball
     this.ctx.beginPath();
     this.ctx.arc(this.ballX, this.ballY, 10 * this.scale, 0, Math.PI * 2);
     this.ctx.fillStyle = "white";
@@ -377,8 +439,9 @@ export class PongGame {
       this.ctx.shadowBlur = 10 * this.scale;
       this.ctx.shadowOffsetX = 0;
       this.ctx.shadowOffsetY = 0;
+      const winnerName = this.scoreLeft >= 3 ? this.playerLeftName : this.playerRightName;
       this.ctx.fillText(
-        this.scoreLeft >= 3 ? `${this.playerLeftName} Wins!` : `${this.playerRightName} Wins!`,
+        i18next.t('game.wins', { player: winnerName }),
         this.canvas.width / 2,
         this.canvas.height / 2
       );

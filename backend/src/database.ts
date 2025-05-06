@@ -21,7 +21,9 @@ export async function initializeDatabase(fastify: FastifyInstance) {
           password TEXT NOT NULL,
           wins INTEGER NOT NULL DEFAULT 0,
           losses INTEGER NOT NULL DEFAULT 0,
-          tournamentsWon INTEGER NOT NULL DEFAULT 0
+          tournamentsWon INTEGER NOT NULL DEFAULT 0,
+          avatar BLOB,
+          avatar_mime TEXT
         );
       `, (err) => {
         if (err) reject(err);
@@ -42,15 +44,6 @@ export async function initializeDatabase(fastify: FastifyInstance) {
       `, (err) => {
         if (err) reject(err);
         fastify.log.info('User_settings table created');
-        resolve();
-      });
-    });
-
-    // Drop the existing matches table (if it exists) to recreate it with the new schema
-    await new Promise<void>((resolve, reject) => {
-      db.run('DROP TABLE IF EXISTS matches', (err) => {
-        if (err) reject(err);
-        fastify.log.info('Dropped existing matches table');
         resolve();
       });
     });
@@ -134,6 +127,22 @@ export async function initializeDatabase(fastify: FastifyInstance) {
       `, (err) => {
         if (err) reject(err);
         fastify.log.info('Sessions table created');
+        resolve();
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS friends (
+          userId INTEGER NOT NULL,
+          friendId INTEGER NOT NULL,
+          PRIMARY KEY (userId, friendId),
+          FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY(friendId) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `, (err) => {
+        if (err) reject(err);
+        fastify.log.info('Friends table created');
         resolve();
       });
     });
