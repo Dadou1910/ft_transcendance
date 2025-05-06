@@ -45,6 +45,7 @@ import { SettingsView } from "./settings.js";
 import { MultiplayerPongGame } from "./multiplayer.js";
 import './i18n/config.js';
 import { renderLanguageSwitcherWithHandler, setupLanguageSwitcherWithHandler } from './language.js';
+import { getBackendUrl, getWebSocketUrl } from './config.js';
 
 // Initializes StatsManager for tracking player stats
 const statsManager = new StatsManager();
@@ -75,7 +76,7 @@ let isTournamentMode: boolean = false;
 let backendTournamentId: number | null = null;
 
 // Update API base URL
-export const API_BASE_URL = window.location.protocol === 'https:' ? 'https://localhost:4000' : 'http://localhost:4000';
+export const API_BASE_URL = getBackendUrl();
 
 // Defines navigate function to handle route changes
 const navigate = (path: string) => router.navigate(path);
@@ -94,7 +95,7 @@ function connectPresenceWS() {
     presenceReconnectTimeout = null;
   }
 
-  const presenceWsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:4000/ws/presence?token=${encodeURIComponent(sessionToken)}`;
+  const presenceWsUrl = getWebSocketUrl(`/ws/presence?token=${encodeURIComponent(sessionToken)}`);
   presenceSocket = new WebSocket(presenceWsUrl);
 
   presenceSocket.onopen = () => {
@@ -327,7 +328,7 @@ router.addRoute("/register", () => {
 
       // After registration, login to get the session token
       console.log("[Registration Debug] Registration successful, attempting login");
-      const loginResponse = await fetch("https://localhost:4000/login", {
+      const loginResponse = await fetch(`${API_BASE_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -1073,8 +1074,7 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
       navigate("/login");
       return;
     }
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:4000/ws/match/${matchId}?token=${encodeURIComponent(sessionToken)}`;
+    const wsUrl = getWebSocketUrl(`/ws/match/${matchId}?token=${encodeURIComponent(sessionToken)}`);
     const ws = new WebSocket(wsUrl);
     
     let localPlayerReady = false;

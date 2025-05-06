@@ -4,13 +4,17 @@ FROM node:20 as builder
 # Set working directory
 WORKDIR /app
 
+# Add build argument for API_IP
+ARG API_IP
+ENV API_IP=$API_IP
+
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy source code
+# Copy source code and .env file
 COPY . .
 
 # Build TypeScript code
