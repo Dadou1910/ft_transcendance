@@ -1,13 +1,7 @@
 import { StatsManager } from "./stats.js";
+import { ensurePresenceWS } from "./index.js";
 
 // Interfaces for game objects
-interface Star {
-  x: number;
-  y: number;
-  speed: number;
-  size: number;
-}
-
 interface Spaceship {
   x: number;
   y: number;
@@ -56,7 +50,6 @@ export class MultiplayerSpaceBattle {
   public remotePlayerReady: boolean = false;
 
   // Game state variables
-  public stars: Star[];
   public leftSpaceship: Spaceship;
   public rightSpaceship: Spaceship;
   public targets: Target[];
@@ -70,7 +63,7 @@ export class MultiplayerSpaceBattle {
   public playerRightName: string;
   public backgroundColor: string = "#d8a8b5";
   public targetSpawnTimer: number = 0;
-  public readonly TARGET_SPAWN_INTERVAL: number = 200;
+  public readonly TARGET_SPAWN_INTERVAL: number = 100;
   public leftShootTimer: number = 0;
   public rightShootTimer: number = 0;
   public readonly SHOOT_INTERVAL: number = 20;
@@ -86,6 +79,7 @@ export class MultiplayerSpaceBattle {
     ArrowRight: false,
   };
   public gameLoopRunning: boolean = false;
+  public spaceshipSpeed: number | null = null;
 
   constructor(
     playerLeftName: string,
@@ -125,12 +119,7 @@ export class MultiplayerSpaceBattle {
     this.onGameEnd = onGameEnd;
 
     // Initialize game objects
-    this.stars = Array.from({ length: 50 }, () => ({
-      x: Math.random() * this.baseWidth,
-      y: Math.random() * this.baseHeight,
-      speed: Math.random() * 0.5 + 0.5,
-      size: Math.random() * 2 + 1,
-    }));
+
     this.leftSpaceship = {
       x: this.baseWidth / 4,
       y: this.baseHeight - 30,
@@ -166,6 +155,76 @@ export class MultiplayerSpaceBattle {
         this.navigate("/");
       };
     }
+
+    // Touch controls for mobile/tablet (split screen for both spaceships)
+    if ('ontouchstart' in window) {
+      let lastTouchX: number | null = null;
+      let lastTouchY: number | null = null;
+      this.canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          const rect = this.canvas.getBoundingClientRect();
+          lastTouchX = e.touches[0].clientX - rect.left;
+          lastTouchY = e.touches[0].clientY - rect.top;
+        }
+      });
+      this.canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+          const rect = this.canvas.getBoundingClientRect();
+          const touchX = e.touches[0].clientX - rect.left;
+          const touchY = e.touches[0].clientY - rect.top;
+          
+          if (this.isHost) {
+            // Host can only move their own (left) spaceship horizontally at the bottom
+            if (touchX < this.canvas.width / 2) {
+              // Calculate relative movement
+              const deltaX = touchX - (lastTouchX || touchX);
+              // Only update x, y is fixed at the initial spawn position
+              this.leftSpaceship.x = Math.max(
+                this.leftSpaceship.width / 2,
+                Math.min(this.canvas.width / 2 - this.leftSpaceship.width / 2, 
+                  this.leftSpaceship.x + deltaX * 0.5)
+              );
+              this.leftSpaceship.y = (this.baseHeight - 30) * this.scale;
+            }
+            // Do nothing for right half (host cannot move right spaceship)
+          } else {
+            // Guest can only send input for their own spaceship (right side)
+            if (touchX >= this.canvas.width / 2) {
+              if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                if (lastTouchX !== null) {
+                  // Calculate relative movement
+                  const deltaX = touchX - lastTouchX;
+                  // Send movement direction based on relative movement
+                  const direction = deltaX < 0 ? 'ArrowLeft' : 'ArrowRight';
+                  // Send key press with movement speed based on delta
+                  this.ws.send(JSON.stringify({ 
+                    type: 'paddle', 
+                    key: direction, 
+                    pressed: true,
+                    speed: Math.min(Math.abs(deltaX) * 0.5, 5) // Limit max speed
+                  }));
+                  // Send key release for opposite direction
+                  const oppositeDirection = direction === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
+                  this.ws.send(JSON.stringify({ type: 'paddle', key: oppositeDirection, pressed: false }));
+                }
+              }
+            }
+          }
+          lastTouchX = touchX;
+          lastTouchY = touchY;
+        }
+      }, { passive: false });
+      this.canvas.addEventListener('touchend', () => {
+        // Send key release for both directions when touch ends
+        if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowLeft', pressed: false }));
+          this.ws.send(JSON.stringify({ type: 'paddle', key: 'ArrowRight', pressed: false }));
+        }
+        lastTouchX = null;
+        lastTouchY = null;
+      });
+    }
   }
 
   public setupWebSocket(ws: WebSocket, isHost: boolean, opponentName: string) {
@@ -178,20 +237,42 @@ export class MultiplayerSpaceBattle {
   // Host: handle input from guest
   public handlePaddleMessage(msg: any) {
     if (this.isHost && msg.type === "paddle" && msg.key in this.keys) {
-      this.keys[msg.key as keyof typeof this.keys] = msg.pressed;
+      // Only process ArrowLeft/ArrowRight keys from guest
+      if (msg.key === "ArrowLeft" || msg.key === "ArrowRight") {
+        this.keys[msg.key as keyof typeof this.keys] = msg.pressed;
+        // Store the speed if provided
+        if (msg.speed) {
+          this.spaceshipSpeed = msg.speed * this.scale;
+        }
+      }
     }
   }
 
   // Guest: handle state updates from host
   public handleStateMessage(msg: any) {
     if (!this.isHost && msg.type === "state") {
-      // Overwrite all relevant state
-      this.leftSpaceship.x = msg.state.leftSpaceship.x;
-      this.leftSpaceship.y = msg.state.leftSpaceship.y;
-      this.rightSpaceship.x = msg.state.rightSpaceship.x;
-      this.rightSpaceship.y = msg.state.rightSpaceship.y;
-      this.targets = msg.state.targets;
-      this.projectiles = msg.state.projectiles;
+      // Rescale normalized state to local canvas
+      this.leftSpaceship.x = msg.state.leftSpaceship.x * this.canvas.width;
+      this.leftSpaceship.y = msg.state.leftSpaceship.y * this.canvas.height;
+      this.leftSpaceship.width = msg.state.leftSpaceship.width * this.canvas.width;
+      this.leftSpaceship.height = msg.state.leftSpaceship.height * this.canvas.height;
+      this.rightSpaceship.x = msg.state.rightSpaceship.x * this.canvas.width;
+      this.rightSpaceship.y = msg.state.rightSpaceship.y * this.canvas.height;
+      this.rightSpaceship.width = msg.state.rightSpaceship.width * this.canvas.width;
+      this.rightSpaceship.height = msg.state.rightSpaceship.height * this.canvas.height;
+      this.targets = msg.state.targets.map((t: any) => ({
+        x: t.x * this.canvas.width,
+        y: t.y * this.canvas.height,
+        radius: t.radius * this.canvas.width,
+        speed: t.speed * this.canvas.height,
+        side: t.side,
+      }));
+      this.projectiles = msg.state.projectiles.map((p: any) => ({
+        x: p.x * this.canvas.width,
+        y: p.y * this.canvas.height,
+        speed: p.speed * this.canvas.height,
+        side: p.side,
+      }));
       this.scoreLeft = msg.state.scoreLeft;
       this.scoreRight = msg.state.scoreRight;
       this.gameOver = msg.state.gameOver;
@@ -237,23 +318,42 @@ export class MultiplayerSpaceBattle {
 
   // Host: runs the game loop and sends state to guest
   public startGameLoop() {
-    console.log('========== DEBUG: GAME LOOP STARTED FROM STARTGAMELOOP() ==========');
     const loop = (timestamp: number) => {
       if (!this.gameStarted || this.gameOver) {
-        console.log('========== DEBUG: GAME LOOP STOPPED FROM LOOP() - GAME NOT STARTED OR GAME OVER ==========');
         return;
       }
       this.updateGameState(timestamp);
       this.draw(timestamp);
-      // Send state to guest
+      // Send normalized state to guest
       if (this.ws && this.isHost) {
         this.ws.send(JSON.stringify({
           type: "state",
           state: {
-            leftSpaceship: this.leftSpaceship,
-            rightSpaceship: this.rightSpaceship,
-            targets: this.targets,
-            projectiles: this.projectiles,
+            leftSpaceship: {
+              x: this.leftSpaceship.x / this.canvas.width,
+              y: this.leftSpaceship.y / this.canvas.height,
+              width: this.leftSpaceship.width / this.canvas.width,
+              height: this.leftSpaceship.height / this.canvas.height,
+            },
+            rightSpaceship: {
+              x: this.rightSpaceship.x / this.canvas.width,
+              y: this.rightSpaceship.y / this.canvas.height,
+              width: this.rightSpaceship.width / this.canvas.width,
+              height: this.rightSpaceship.height / this.canvas.height,
+            },
+            targets: this.targets.map(t => ({
+              x: t.x / this.canvas.width,
+              y: t.y / this.canvas.height,
+              radius: t.radius / this.canvas.width,
+              speed: t.speed / this.canvas.height,
+              side: t.side,
+            })),
+            projectiles: this.projectiles.map(p => ({
+              x: p.x / this.canvas.width,
+              y: p.y / this.canvas.height,
+              speed: p.speed / this.canvas.height,
+              side: p.side,
+            })),
             scoreLeft: this.scoreLeft,
             scoreRight: this.scoreRight,
             gameOver: this.gameOver,
@@ -276,23 +376,25 @@ export class MultiplayerSpaceBattle {
     const deltaTimeFactor = deltaTime / frameTime;
 
     // Move spaceships
-    const spaceshipSpeed = 5 * this.scale * deltaTimeFactor;
+    const hostSpaceshipSpeed = 5 * this.scale * deltaTimeFactor;
+    const guestSpaceshipSpeed = this.spaceshipSpeed || hostSpaceshipSpeed;
     if (this.keys.a && this.leftSpaceship.x - this.leftSpaceship.width / 2 > 0) {
-      this.leftSpaceship.x -= spaceshipSpeed;
+      this.leftSpaceship.x -= hostSpaceshipSpeed;
     }
     if (this.keys.d && this.leftSpaceship.x + this.leftSpaceship.width / 2 < this.canvas.width / 2) {
-      this.leftSpaceship.x += spaceshipSpeed;
+      this.leftSpaceship.x += hostSpaceshipSpeed;
     }
     if (this.keys.ArrowLeft && this.rightSpaceship.x - this.rightSpaceship.width / 2 > this.canvas.width / 2) {
-      this.rightSpaceship.x -= spaceshipSpeed;
+      this.rightSpaceship.x -= guestSpaceshipSpeed;
     }
     if (this.keys.ArrowRight && this.rightSpaceship.x + this.rightSpaceship.width / 2 < this.canvas.width) {
-      this.rightSpaceship.x += spaceshipSpeed;
+      this.rightSpaceship.x += guestSpaceshipSpeed;
     }
 
+    // --- Timers are now time-based ---
     // Automatically shoot projectiles
-    this.leftShootTimer++;
-    if (this.leftShootTimer >= this.SHOOT_INTERVAL) {
+    this.leftShootTimer += deltaTime;
+    if (this.leftShootTimer >= this.SHOOT_INTERVAL / 60) {
       this.projectiles.push({
         x: this.leftSpaceship.x,
         y: this.leftSpaceship.y - this.leftSpaceship.height / 2,
@@ -301,8 +403,8 @@ export class MultiplayerSpaceBattle {
       });
       this.leftShootTimer = 0;
     }
-    this.rightShootTimer++;
-    if (this.rightShootTimer >= this.SHOOT_INTERVAL) {
+    this.rightShootTimer += deltaTime;
+    if (this.rightShootTimer >= this.SHOOT_INTERVAL / 60) {
       this.projectiles.push({
         x: this.rightSpaceship.x,
         y: this.rightSpaceship.y - this.rightSpaceship.height / 2,
@@ -310,6 +412,15 @@ export class MultiplayerSpaceBattle {
         side: "right",
       });
       this.rightShootTimer = 0;
+    }
+
+    // Only host spawns targets
+    if (this.isHost) {
+      this.targetSpawnTimer += deltaTime;
+      if (this.targetSpawnTimer >= this.TARGET_SPAWN_INTERVAL / 60) {
+        this.spawnTarget();
+        this.targetSpawnTimer = 0;
+      }
     }
 
     // Update targets
@@ -325,15 +436,6 @@ export class MultiplayerSpaceBattle {
       projectile.y += projectile.speed * deltaTimeFactor;
     });
     this.projectiles = this.projectiles.filter(projectile => projectile.y > -10 * this.scale);
-
-    // Only host spawns targets
-    if (this.isHost) {
-      this.targetSpawnTimer++;
-      if (this.targetSpawnTimer >= this.TARGET_SPAWN_INTERVAL) {
-        this.spawnTarget();
-        this.targetSpawnTimer = 0;
-      }
-    }
 
     // Check collisions
     this.checkCollisions();
@@ -390,17 +492,21 @@ export class MultiplayerSpaceBattle {
   }
 
   private handleGameOver(winnerName: string): void {
+    if (this.gameOver) return; // Prevent multiple calls
     this.gameOver = true;
     this.targets = [];
     this.projectiles = [];
     this.restartButton.style.display = "none";
+    
+    // Only attempt to record match if we're the host
     if (this.isHost) {
       this.statsManager.recordMatch(winnerName, winnerName === this.playerLeftName ? this.playerRightName : this.playerLeftName, "Online Space Battle", {
-      player1Score: this.scoreLeft,
-      player2Score: this.scoreRight,
-      sessionToken: localStorage.getItem("sessionToken")
-    });
+        player1Score: this.scoreLeft,
+        player2Score: this.scoreRight,
+        sessionToken: localStorage.getItem("sessionToken")
+      });
     }
+    
     if (this.onGameEnd) {
       this.onGameEnd(winnerName);
     }
@@ -420,7 +526,6 @@ export class MultiplayerSpaceBattle {
     // Clear canvas and draw background
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawBackground();
-    this.drawStars();
     this.drawSpaceships();
     this.drawTargets();
     this.drawProjectiles();
@@ -463,17 +568,6 @@ export class MultiplayerSpaceBattle {
     this.ctx.moveTo(this.canvas.width / 2, 0);
     this.ctx.lineTo(this.canvas.width / 2, this.canvas.height);
     this.ctx.stroke();
-  }
-
-  private drawStars(): void {
-    this.ctx.fillStyle = "white";
-    this.stars.forEach(star => {
-      star.y += star.speed * this.scale;
-      if (star.y > this.canvas.height) star.y = -star.size;
-      this.ctx.beginPath();
-      this.ctx.arc(star.x * this.scale, star.y, star.size, 0, Math.PI * 2);
-      this.ctx.fill();
-    });
   }
 
   private drawSpaceships(): void {
@@ -585,20 +679,30 @@ export class MultiplayerSpaceBattle {
         this.isPaused = !this.isPaused;
       }
       if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        if (!this.isHost && this.ws) {
-          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
-        } else {
+        // Host can only use A/D keys
+        if (this.isHost && (e.key === "a" || e.key === "d")) {
           this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = true;
+        }
+        // Guest can only use ArrowLeft/ArrowRight keys
+        else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
+          if (this.ws) {
+            this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
+          }
         }
       }
     });
 
     document.addEventListener("keyup", (e) => {
       if (["a", "d", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        if (!this.isHost && this.ws) {
-          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
-        } else {
+        // Host can only use A/D keys
+        if (this.isHost && (e.key === "a" || e.key === "d")) {
           this.keys[e.key as "a" | "d" | "ArrowLeft" | "ArrowRight"] = false;
+        }
+        // Guest can only use ArrowLeft/ArrowRight keys
+        else if (!this.isHost && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !this.gameOver) {
+          if (this.ws) {
+            this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
+          }
         }
       }
     });
@@ -623,6 +727,8 @@ export class MultiplayerSpaceBattle {
         console.log('========== DEBUG: GAME LOOP STOPPED FROM CLEANUP() ==========');
     }
     this.gameLoopRunning = false;
+    // Re-establish presence connection
+    ensurePresenceWS();
     this.navigate("/");
   }
 
@@ -647,39 +753,17 @@ export class MultiplayerSpaceBattle {
     this.canvas.style.display = "block";
     this.canvas.style.margin = "auto";
 
-    // Update positions and sizes with scale
-    this.leftSpaceship.x = (this.baseWidth / 4) * this.scale;
-    this.leftSpaceship.y = (this.baseHeight - 30) * this.scale;
-    this.leftSpaceship.width = 30 * this.scale;
-    this.leftSpaceship.height = 20 * this.scale;
-    this.rightSpaceship.x = (this.baseWidth * 3 / 4) * this.scale;
-    this.rightSpaceship.y = (this.baseHeight - 30) * this.scale;
-    this.rightSpaceship.width = 30 * this.scale;
-    this.rightSpaceship.height = 20 * this.scale;
-
-    this.stars = this.stars.map(star => ({
-      x: star.x * this.scale,
-      y: star.y * this.scale,
-      speed: star.speed * this.scale,
-      size: star.size,
-    }));
-
-    this.targets = this.targets.map(target => ({
-      ...target,
-      x: target.side === "left"
-        ? target.x * this.scale
-        : (target.x - this.baseWidth / 2) * this.scale + this.canvas.width / 2,
-      y: target.y * this.scale,
-      radius: target.radius * this.scale,
-    }));
-
-    this.projectiles = this.projectiles.map(projectile => ({
-      ...projectile,
-      x: projectile.side === "left"
-        ? projectile.x * this.scale
-        : (projectile.x - this.baseWidth / 2) * this.scale + this.canvas.width / 2,
-      y: projectile.y * this.scale,
-      speed: projectile.speed * this.scale,
-    }));
+    // Update positions and sizes with scale for local host only
+    if (this.isHost) {
+      this.leftSpaceship.x = (this.baseWidth / 4) * this.scale;
+      this.leftSpaceship.y = (this.baseHeight - 30) * this.scale;
+      this.leftSpaceship.width = 30 * this.scale;
+      this.leftSpaceship.height = 20 * this.scale;
+      this.rightSpaceship.x = (this.baseWidth * 3 / 4) * this.scale;
+      this.rightSpaceship.y = (this.baseHeight - 30) * this.scale;
+      this.rightSpaceship.width = 30 * this.scale;
+      this.rightSpaceship.height = 20 * this.scale;
+    }
+    // Do NOT rescale targets/projectiles here for guest; already handled in handleStateMessage
   }
 } 

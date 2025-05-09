@@ -1431,3 +1431,14 @@ body {
     @apply translate-x-0;
   }
 }
+
+/* Responsive layout for game view */
+@media (max-width: 600px) {
+  .pong-canvas {
+    width: 98vw !important;
+    max-width: 98vw !important;
+  }
+  .score-container {
+    font-size: 1rem !important;
+  }
+}

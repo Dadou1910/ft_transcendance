@@ -84,6 +84,7 @@ const navigate = (path: string) => router.navigate(path);
 // --- Presence WebSocket connection ---
 let presenceSocket: WebSocket | null = null;
 let presenceReconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+let presencePingInterval: ReturnType<typeof setInterval> | null = null;
 
 function connectPresenceWS() {
   const sessionToken = localStorage.getItem("sessionToken");
@@ -95,6 +96,18 @@ function connectPresenceWS() {
     presenceReconnectTimeout = null;
   }
 
+  // Clear any existing ping interval
+  if (presencePingInterval) {
+    clearInterval(presencePingInterval);
+    presencePingInterval = null;
+  }
+
+  // Close existing socket if it exists
+  if (presenceSocket) {
+    presenceSocket.close();
+    presenceSocket = null;
+  }
+
   const presenceWsUrl = getWebSocketUrl(`/ws/presence?token=${encodeURIComponent(sessionToken)}`);
   presenceSocket = new WebSocket(presenceWsUrl);
 
@@ -104,6 +117,12 @@ function connectPresenceWS() {
     if (presenceSocket?.readyState === WebSocket.OPEN) {
       presenceSocket.send(JSON.stringify({ type: 'ping' }));
     }
+    // Start periodic ping to keep connection alive
+    presencePingInterval = setInterval(() => {
+      if (presenceSocket?.readyState === WebSocket.OPEN) {
+        presenceSocket.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000); // Send ping every 30 seconds
   };
 
   presenceSocket.onclose = () => {
@@ -111,6 +130,11 @@ function connectPresenceWS() {
     // Clear any existing reconnect timeout
     if (presenceReconnectTimeout) {
       clearTimeout(presenceReconnectTimeout);
+    }
+    // Clear ping interval
+    if (presencePingInterval) {
+      clearInterval(presencePingInterval);
+      presencePingInterval = null;
     }
     // Try to reconnect after a short delay
     presenceReconnectTimeout = setTimeout(connectPresenceWS, 2000);
@@ -138,9 +162,25 @@ function connectPresenceWS() {
 }
 
 // Call connectPresenceWS after login or on any authenticated page
-function ensurePresenceWS() {
+export function ensurePresenceWS() {
   if (!presenceSocket || presenceSocket.readyState === WebSocket.CLOSED) {
     connectPresenceWS();
+  }
+}
+
+// Clean up presence WebSocket connection
+function cleanupPresenceWS() {
+  if (presenceSocket) {
+    presenceSocket.close();
+    presenceSocket = null;
+  }
+  if (presenceReconnectTimeout) {
+    clearTimeout(presenceReconnectTimeout);
+    presenceReconnectTimeout = null;
+  }
+  if (presencePingInterval) {
+    clearInterval(presencePingInterval);
+    presencePingInterval = null;
   }
 }
 
@@ -1083,25 +1123,57 @@ router.addRoute("/multiplayerGame/:matchId", async () => {
     let assigned = false;
     let opponentName = "Waiting for opponent...";
     let multiplayerGame: any = null;
+    let gameStarted = false;
 
     // Store event listener references for cleanup
     const keydownListener = (e: KeyboardEvent) => {
-      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
+      if (e.key === " " && gameStarted) {
         ws.send(JSON.stringify({
           type: "paddle",
           key: e.key,
           pressed: true,
         }));
       }
+      if (isHost) {
+        // Host only sends W/S keys
+        if (["w", "s"].includes(e.key)) {
+          ws.send(JSON.stringify({
+            type: "paddle",
+            key: e.key,
+            pressed: true,
+          }));
+        }
+      } else {
+        // Guest only sends ArrowUp/ArrowDown keys
+        if (["ArrowUp", "ArrowDown"].includes(e.key)) {
+          ws.send(JSON.stringify({
+            type: "paddle",
+            key: e.key,
+            pressed: true,
+          }));
+        }
+      }
     };
 
     const keyupListener = (e: KeyboardEvent) => {
-      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
-        ws.send(JSON.stringify({
-          type: "paddle",
-          key: e.key,
-          pressed: false,
-        }));
+      if (isHost) {
+        // Host only sends W/S keys
+        if (["w", "s"].includes(e.key)) {
+          ws.send(JSON.stringify({
+            type: "paddle",
+            key: e.key,
+            pressed: false,
+          }));
+        }
+      } else {
+        // Guest only sends ArrowUp/ArrowDown keys
+        if (["ArrowUp", "ArrowDown"].includes(e.key)) {
+          ws.send(JSON.stringify({
+            type: "paddle",
+            key: e.key,
+            pressed: false,
+          }));
+        }
       }
     };
 
@@ -1689,16 +1761,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Add beforeunload handler to close presenceSocket
 window.addEventListener("beforeunload", () => {
-  if (presenceSocket) {
-    presenceSocket.close();
-    presenceSocket = null;
-  }
-  if (presenceReconnectTimeout) {
-    clearTimeout(presenceReconnectTimeout);
-    presenceReconnectTimeout = null;
-  }
+  cleanupPresenceWS();
 });
 
-// On logout, close presenceSocket
-// In all logout callbacks, add:
-// if (presenceSocket) presenceSocket.close();
+// Add visibility change handler to reconnect when tab becomes visible
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    ensurePresenceWS();
+  }
+});

@@ -26,6 +26,9 @@ export function isUserOnline(userId: number): boolean {
   return onlineUsers.has(userId);
 }
 
+// Track active presence connections
+const presenceConnections = new Map<number, SocketStream>();
+
 const matchClients: MatchClients = {};
 
 export async function wsRoutes(fastify: FastifyInstance, db: Database) {
@@ -365,18 +368,39 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
         return;
       }
 
+      // Close any existing connection for this user
+      const existingConnection = presenceConnections.get(user.id);
+      if (existingConnection && existingConnection.socket.readyState === 1) {
+        existingConnection.socket.close();
+      }
+
+      // Store the new connection
+      presenceConnections.set(user.id, connection);
+
       // Mark user as online
       onlineUsers.add(user.id);
       fastify.log.info(`User ${user.name} connected to presence WebSocket.`);
 
+      // Handle connection close
       connection.socket.on('close', () => {
-        onlineUsers.delete(user.id);
-        fastify.log.info(`User ${user.name} disconnected from presence WebSocket.`);
+        // Only remove from online users if this is the most recent connection
+        if (presenceConnections.get(user.id) === connection) {
+          onlineUsers.delete(user.id);
+          presenceConnections.delete(user.id);
+          fastify.log.info(`User ${user.name} disconnected from presence WebSocket.`);
+        }
       });
 
-      // Optionally, handle ping/pong to keep the connection alive
+      // Handle ping messages
       connection.socket.on('message', (msg: Buffer) => {
-        // No-op, just keep alive
+        try {
+          const data = JSON.parse(msg.toString());
+          if (data.type === 'ping') {
+            connection.socket.send(JSON.stringify({ type: 'pong' }));
+          }
+        } catch (err) {
+          fastify.log.error('Error processing presence message:', err);
+        }
       });
 
     } catch (err) {

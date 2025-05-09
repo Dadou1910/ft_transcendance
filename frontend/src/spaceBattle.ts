@@ -1,13 +1,7 @@
 import { StatsManager } from "./stats.js";
 import i18next from "./i18n/config.js";
 
-// Interfaces for game objects
-interface Star {
-  x: number;
-  y: number;
-  speed: number;
-  size: number;
-}
+
 
 interface Spaceship {
   x: number;
@@ -55,7 +49,6 @@ export class SpaceBattle {
   private onGameEnd?: (winnerName: string) => void;
 
   // Game objects
-  private stars: Star[];
   private leftSpaceship: Spaceship;
   private rightSpaceship: Spaceship;
   private targets: Target[];
@@ -141,12 +134,6 @@ export class SpaceBattle {
     this.restartButton.style.display = "block";
 
     // Initialize game objects
-    this.stars = Array.from({ length: 50 }, () => ({
-      x: Math.random() * this.baseWidth,
-      y: Math.random() * this.baseHeight,
-      speed: Math.random() * 0.5 + 0.5,
-      size: Math.random() * 2 + 1,
-    }));
 
     this.leftSpaceship = {
       x: this.baseWidth / 4,
@@ -206,12 +193,6 @@ export class SpaceBattle {
     this.rightSpaceship.width = 30 * this.scale;
     this.rightSpaceship.height = 20 * this.scale;
 
-    this.stars = this.stars.map(star => ({
-      x: star.x * this.scale,
-      y: star.y * this.scale,
-      speed: star.speed * this.scale,
-      size: star.size,
-    }));
 
     this.targets = this.targets.map(target => ({
       ...target,
@@ -318,6 +299,47 @@ export class SpaceBattle {
 
     // Resize handler
     window.addEventListener("resize", () => this.resizeCanvas());
+
+    // Touch controls for mobile/tablet
+    if ('ontouchstart' in window) {
+      let lastTouchX: number | null = null;
+      this.canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          lastTouchX = e.touches[0].clientX;
+        }
+      });
+      this.canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+          const rect = this.canvas.getBoundingClientRect();
+          const touchX = e.touches[0].clientX - rect.left;
+          const touchY = e.touches[0].clientY - rect.top;
+          // Left half controls left spaceship, right half controls right spaceship
+          if (touchX < this.canvas.width / 2) {
+            this.leftSpaceship.x = Math.max(
+              this.leftSpaceship.width / 2,
+              Math.min(this.canvas.width / 2 - this.leftSpaceship.width / 2, touchX)
+            );
+            this.leftSpaceship.y = Math.max(
+              this.leftSpaceship.height / 2,
+              Math.min(this.canvas.height - this.leftSpaceship.height / 2, touchY)
+            );
+          } else {
+            this.rightSpaceship.x = Math.max(
+              this.canvas.width / 2 + this.rightSpaceship.width / 2,
+              Math.min(this.canvas.width - this.rightSpaceship.width / 2, touchX)
+            );
+            this.rightSpaceship.y = Math.max(
+              this.rightSpaceship.height / 2,
+              Math.min(this.canvas.height - this.rightSpaceship.height / 2, touchY)
+            );
+          }
+        }
+      }, { passive: false });
+      this.canvas.addEventListener('touchend', () => {
+        lastTouchX = null;
+      });
+    }
   }
 
   // Cleans up event listeners
@@ -362,17 +384,7 @@ export class SpaceBattle {
     this.ctx.stroke();
   }
 
-  // Draws moving stars
-  private drawStars(): void {
-    this.ctx.fillStyle = "white";
-    this.stars.forEach(star => {
-      star.y += star.speed * this.scale;
-      if (star.y > this.canvas.height) star.y = -star.size;
-      this.ctx.beginPath();
-      this.ctx.arc(star.x * this.scale, star.y, star.size, 0, Math.PI * 2);
-      this.ctx.fill();
-    });
-  }
+
 
   // Draws spaceships
   private drawSpaceships(): void {
@@ -493,7 +505,6 @@ export class SpaceBattle {
     // Clear canvas and draw background
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawBackground();
-    this.drawStars();
     this.drawSpaceships();
     this.drawTargets();
     this.drawProjectiles();
