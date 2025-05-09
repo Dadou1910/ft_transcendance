@@ -126,6 +126,33 @@ export class PongGame {
     this.resizeCanvas();
     window.addEventListener("resize", () => this.resizeCanvas());
     this.draw(performance.now()); // Initialize with current time
+
+    // Touch controls for mobile/tablet
+    if ('ontouchstart' in window) {
+      let lastTouchY: number | null = null;
+      this.canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          lastTouchY = e.touches[0].clientY;
+        }
+      });
+      this.canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+          const rect = this.canvas.getBoundingClientRect();
+          const touchX = e.touches[0].clientX - rect.left;
+          const touchY = e.touches[0].clientY - rect.top;
+          // Left half controls left paddle, right half controls right paddle
+          if (touchX < this.canvas.width / 2) {
+            this.paddleLeftY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
+          } else {
+            this.paddleRightY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
+          }
+        }
+      }, { passive: false });
+      this.canvas.addEventListener('touchend', () => {
+        lastTouchY = null;
+      });
+    }
   }
 
   // Computes the speed multiplier based on the speed slider

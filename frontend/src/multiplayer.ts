@@ -1,5 +1,6 @@
 import { StatsManager } from "./stats.js";
 import i18next from './i18n/config.js';
+import { ensurePresenceWS } from "./index.js";
 
 // Multiplayer Pong Game class (WebSocket-based)
 export class MultiplayerPongGame {
@@ -58,6 +59,7 @@ export class MultiplayerPongGame {
   public lastTime: number = 0;
   public gameLoopRunning: boolean = false;
   public animationFrameId: number | null = null;
+  public hasResetInitialScore: boolean = false;
 
   constructor(
     playerLeftName: string,
@@ -111,6 +113,49 @@ export class MultiplayerPongGame {
         this.cleanup();
         this.navigate("/");
       };
+    }
+    // Touch controls for mobile/tablet (split screen for both paddles)
+    if ('ontouchstart' in window) {
+      let lastTouchY: number | null = null;
+      this.canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          lastTouchY = e.touches[0].clientY;
+        }
+      });
+      this.canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+          const rect = this.canvas.getBoundingClientRect();
+          const touchX = e.touches[0].clientX - rect.left;
+          const touchY = e.touches[0].clientY - rect.top;
+          // Left half controls left paddle, right half controls right paddle
+          if (touchX < this.canvas.width / 2) {
+            // Move left paddle (host or guest)
+            this.paddleLeftY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
+            // Send paddle move to host if guest
+            if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+              if (lastTouchY !== null) {
+                const direction = touchY < lastTouchY ? 'w' : 's';
+                this.ws.send(JSON.stringify({ type: 'paddle', key: direction, pressed: true }));
+              }
+            }
+          } else {
+            // Move right paddle (host or guest)
+            this.paddleRightY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
+            // Send paddle move to host if guest
+            if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+              if (lastTouchY !== null) {
+                const direction = touchY < lastTouchY ? 'ArrowUp' : 'ArrowDown';
+                this.ws.send(JSON.stringify({ type: 'paddle', key: direction, pressed: true }));
+              }
+            }
+          }
+          lastTouchY = touchY;
+        }
+      }, { passive: false });
+      this.canvas.addEventListener('touchend', () => {
+        lastTouchY = null;
+      });
     }
     // Multiplayer-specific setup (WebSocket, etc.) will be added here
   }
@@ -215,20 +260,32 @@ export class MultiplayerPongGame {
 
     // Paddle input listeners (both host and guest)
     document.addEventListener("keydown", (e) => {
-      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
-        if (!this.isHost && this.ws) {
-          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: true }));
-        } else {
-          this.keys[e.key as keyof typeof this.keys] = true;
+      if (e.key === " " && this.gameStarted) {
+        this.isPaused = !this.isPaused;
+      }
+      if (this.isHost) {
+        // Host only controls left paddle with W/S
+        if (["w", "s"].includes(e.key)) {
+          this.keys[e.key as "w" | "s"] = true;
+        }
+      } else {
+        // Guest only controls right paddle with ArrowUp/ArrowDown
+        if (["ArrowUp", "ArrowDown"].includes(e.key)) {
+          this.keys[e.key as "ArrowUp" | "ArrowDown"] = true;
         }
       }
     });
+
     document.addEventListener("keyup", (e) => {
-      if (["w", "s", "ArrowUp", "ArrowDown"].includes(e.key)) {
-        if (!this.isHost && this.ws) {
-          this.ws.send(JSON.stringify({ type: "paddle", key: e.key, pressed: false }));
-        } else {
-          this.keys[e.key as keyof typeof this.keys] = false;
+      if (this.isHost) {
+        // Host only controls left paddle with W/S
+        if (["w", "s"].includes(e.key)) {
+          this.keys[e.key as "w" | "s"] = false;
+        }
+      } else {
+        // Guest only controls right paddle with ArrowUp/ArrowDown
+        if (["ArrowUp", "ArrowDown"].includes(e.key)) {
+          this.keys[e.key as "ArrowUp" | "ArrowDown"] = false;
         }
       }
     });
@@ -246,13 +303,31 @@ export class MultiplayerPongGame {
     });
   }
 
-  
-
   private handleGameOver(winnerName: string): void {
+    if (this.gameOver) return; // Prevent multiple calls
     this.gameOver = true;
     this.ballSpeedX = 0;
     this.ballSpeedY = 0;
     this.restartButton.style.display = "none";
+    
+    // Send final state to host if we're the guest
+    if (!this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: "state",
+        state: {
+          paddleLeftY: this.paddleLeftY,
+          paddleRightY: this.paddleRightY,
+          ballX: this.ballX,
+          ballY: this.ballY,
+          ballSpeedX: this.ballSpeedX,
+          ballSpeedY: this.ballSpeedY,
+          scoreLeft: this.scoreLeft,
+          scoreRight: this.scoreRight,
+          gameOver: this.gameOver,
+          gameStarted: this.gameStarted
+        }
+      }));
+    }
     
     // Only attempt to record match if we're the host and the WebSocket is still open
     if (this.isHost && this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -269,7 +344,7 @@ export class MultiplayerPongGame {
     }
     
     // Call onGameEnd callback if it exists and hasn't been triggered yet
-    if (this.onGameEnd) {
+    if (this.onGameEnd && !this.hasTriggeredGameEnd) {
       this.hasTriggeredGameEnd = true;
       this.onGameEnd(winnerName);
     }
@@ -277,8 +352,16 @@ export class MultiplayerPongGame {
 
   // Host: handle paddle input from guest
   public handlePaddleMessage(msg: any) {
-    if (this.isHost && msg.type === "paddle" && msg.key in this.keys) {
-      this.keys[msg.key as keyof typeof this.keys] = msg.pressed;
+    if (this.isHost && msg.type === "paddle") {
+      // Host only processes ArrowUp/ArrowDown from guest
+      if (["ArrowUp", "ArrowDown"].includes(msg.key)) {
+        this.keys[msg.key as "ArrowUp" | "ArrowDown"] = msg.pressed;
+      }
+    } else if (!this.isHost && msg.type === "paddle") {
+      // Guest only processes W/S from host
+      if (["w", "s"].includes(msg.key)) {
+        this.keys[msg.key as "w" | "s"] = msg.pressed;
+      }
     }
   }
 
@@ -334,7 +417,7 @@ export class MultiplayerPongGame {
       this.updateGameState(timestamp);
       this.draw(timestamp);
       // Send state to guest
-      if (this.ws && this.isHost) {
+      if (this.ws && this.isHost && !this.gameOver) {
         this.ws.send(JSON.stringify({
           type: "state",
           state: {
@@ -363,6 +446,15 @@ export class MultiplayerPongGame {
     this.lastTime = timestamp;
     if (this.isPaused || this.gameOver) return;
 
+    // Reset any initial point that might be incorrectly assigned (only once)
+    if (this.gameStarted && !this.hasResetInitialScore && (this.scoreLeft === 1 || this.scoreRight === 1)) {
+      this.scoreLeft = 0;
+      this.scoreRight = 0;
+      this.scoreLeftElement.textContent = "0";
+      this.scoreRightElement.textContent = "0";
+      this.hasResetInitialScore = true;
+    }
+
     // Target 60 FPS for normalization (1/60 seconds per frame)
     const frameTime = 1 / 60;
     const deltaTimeFactor = deltaTime / frameTime; // Scale movements to match 60 FPS
@@ -383,7 +475,8 @@ export class MultiplayerPongGame {
       this.ballX - 10 <= 30 &&
       this.ballX + 10 >= 10 &&
       this.ballY >= this.paddleLeftY &&
-      this.ballY <= this.paddleLeftY + 80
+      this.ballY <= this.paddleLeftY + 80 &&
+      (this.ballX - 10 <= 10 || this.ballX + 10 >= 30)
     ) {
       this.ballSpeedX = -this.ballSpeedX;
       this.ballX = 30 + 10;
@@ -392,7 +485,8 @@ export class MultiplayerPongGame {
       this.ballX + 10 >= this.baseWidth - 30 &&
       this.ballX - 10 <= this.baseWidth - 10 &&
       this.ballY >= this.paddleRightY &&
-      this.ballY <= this.paddleRightY + 80
+      this.ballY <= this.paddleRightY + 80 &&
+      (this.ballX - 10 <= this.baseWidth - 30 || this.ballX + 10 >= this.baseWidth - 10)
     ) {
       this.ballSpeedX = -this.ballSpeedX;
       this.ballX = this.baseWidth - 30 - 10;
@@ -400,9 +494,47 @@ export class MultiplayerPongGame {
     // Scoring
     if (this.ballX < 0) {
       this.scoreRight++;
+      this.scoreRightElement.textContent = this.scoreRight.toString();
+      // Send immediate score update
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: "state",
+          state: {
+            paddleLeftY: this.paddleLeftY,
+            paddleRightY: this.paddleRightY,
+            ballX: this.ballX,
+            ballY: this.ballY,
+            ballSpeedX: this.ballSpeedX,
+            ballSpeedY: this.ballSpeedY,
+            scoreLeft: this.scoreLeft,
+            scoreRight: this.scoreRight,
+            gameOver: this.gameOver,
+            gameStarted: this.gameStarted
+          }
+        }));
+      }
       this.resetBall();
     } else if (this.ballX > this.baseWidth) {
       this.scoreLeft++;
+      this.scoreLeftElement.textContent = this.scoreLeft.toString();
+      // Send immediate score update
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: "state",
+          state: {
+            paddleLeftY: this.paddleLeftY,
+            paddleRightY: this.paddleRightY,
+            ballX: this.ballX,
+            ballY: this.ballY,
+            ballSpeedX: this.ballSpeedX,
+            ballSpeedY: this.ballSpeedY,
+            scoreLeft: this.scoreLeft,
+            scoreRight: this.scoreRight,
+            gameOver: this.gameOver,
+            gameStarted: this.gameStarted
+          }
+        }));
+      }
       this.resetBall();
     }
     // Game over
@@ -464,13 +596,7 @@ export class MultiplayerPongGame {
     if (backButton) {
       backButton.style.display = "block";
       backButton.onclick = () => {
-        // Send cleanup message to both players
-        if (this.ws) {
-          this.ws.send(JSON.stringify({ type: "cleanup", reason: "opponent_left" }));
-        }
-        if (this.ws) {
-          this.ws.close();
-        }
+
         this.cleanup();
         this.navigate("/");
       };
@@ -480,7 +606,7 @@ export class MultiplayerPongGame {
   public cleanup(): void {
     // Send cleanup message to both players
     if (this.ws) {
-      this.ws.send(JSON.stringify({ type: "cleanup" }));
+      this.ws.send(JSON.stringify({ type: "cleanup", reason: "opponent_left"}));
     }
     if (this.ws) {
       this.ws.close();
@@ -492,23 +618,13 @@ export class MultiplayerPongGame {
     if (this.gameLoopRunning) {
       this.gameLoopRunning = false;
     }
+    // Re-establish presence connection
+    ensurePresenceWS();
   }
 
   // Computes the speed multiplier based on the speed slider
   public getSpeedMultiplier(): number {
     return parseInt(this.speedSlider.value) / 5;
-  }
-
-  private async recordMatch(winnerName: string, loserName: string, winnerScore: number, loserScore: number) {
-    try {
-      this.statsManager.recordMatch(winnerName, loserName, "Online Pong", {
-        player1Score: winnerScore,
-        player2Score: loserScore,
-        sessionToken: localStorage.getItem("sessionToken")
-      });
-    } catch (error) {
-      console.error('[DEBUG] Match recording error:', error);
-    }
   }
 
   private resizeCanvas(): void {

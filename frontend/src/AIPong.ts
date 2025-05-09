@@ -95,6 +95,28 @@ export class AIPong extends NeonCityPong {
 
     // Initialize background canvas
     this.initBackgroundCanvas();
+
+    // Touch controls for mobile/tablet
+    if ('ontouchstart' in window) {
+      let lastTouchY: number | null = null;
+      this.canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          lastTouchY = e.touches[0].clientY;
+        }
+      });
+      this.canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+          const rect = this.canvas.getBoundingClientRect();
+          const touchY = e.touches[0].clientY - rect.top;
+          // Only left paddle (player) moves with touch
+          this.paddleLeftY = Math.max(0, Math.min(this.baseHeight - 80, touchY - 40));
+        }
+      }, { passive: false });
+      this.canvas.addEventListener('touchend', () => {
+        lastTouchY = null;
+      });
+    }
   }
 
   // Override setupEventListeners to remove player controls for right paddle

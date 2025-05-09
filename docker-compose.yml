@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - API_IP=${API_IP}
     ports:
       - "443:443"   # HTTPS
       - "80:80"     # HTTP (for redirect to HTTPS)
@@ -11,6 +14,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      - API_IP=${API_IP}
   backend:
     build:
       context: ./backend
@@ -19,19 +24,13 @@ services:
     networks:
       - app-network
     environment:
-      - PORT=4000
-      - DB_PATH=/app/data/transcendence.db # Use this path for local development; at school, change to /goinfre/transcendence.db or /sgoinfre/transcendence.db
-      - BCRYPT_SALT_ROUNDS=10
+      - PORT=${PORT}
+      - DB_PATH=${DB_PATH}
+      - BCRYPT_SALT_ROUNDS=${BCRYPT_SALT_ROUNDS}
     # volumes:
     #   - /goinfre:/goinfre # Uncomment this at school to map /goinfre or /sgoinfre as required by the subject (Page 6)
     restart: unless-stopped
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-    networks:
-      - app-network
-    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge
