@@ -42,7 +42,7 @@ export async function avatarRoutes(fastify: FastifyInstance, db: Database) {
         .header('Cross-Origin-Resource-Policy', 'cross-origin')
         .send(row.avatar);
     } catch (err) {
-      fastify.log.error('[Avatar Debug] Error:', err);
+      fastify.log.error(err, '[Avatar Debug] Error:');
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -66,11 +66,7 @@ export async function avatarRoutes(fastify: FastifyInstance, db: Database) {
             reply.status(400).send({ error: 'No file uploaded' });
             return;
         }
-        fastify.log.info('[Avatar Upload] File received:', {
-            filename: data.filename,
-            mimetype: data.mimetype,
-            size: data.file.bytesRead
-        });
+        fastify.log.info({ filename: data.filename, mimetype: data.mimetype, size: data.file.bytesRead }, '[Avatar Upload] File received:');
 
         // Validate file type
         if (!data.mimetype.startsWith('image/')) {
@@ -104,11 +100,11 @@ export async function avatarRoutes(fastify: FastifyInstance, db: Database) {
             fastify.log.info('[Avatar Upload] Avatar saved successfully to database');
             reply.send({ success: true });
         } catch (dbError) {
-            fastify.log.error('[Avatar Upload] Database error:', dbError);
+            fastify.log.error(dbError, '[Avatar Upload] Database error:');
             reply.status(500).send({ error: 'Failed to save avatar' });
         }
     } catch (error) {
-        fastify.log.error('[Avatar Upload] Error processing request:', error);
+        fastify.log.error(error, '[Avatar Upload] Error processing request:');
         reply.status(500).send({ error: 'Internal server error' });
     }
   });

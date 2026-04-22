@@ -76,7 +76,7 @@ export async function matchmakingRoutes(fastify: FastifyInstance) {
       fastify.log.info(`[MATCHMAKING] Added user ${user.id} to queue. Queue length: ${matchmakingQueue.length}`);
       return { status: 'waiting', userId: user.id };
     } catch (error) {
-      fastify.log.error('Matchmaking error:', error);
+      fastify.log.error(error, 'Matchmaking error:');
       reply.code(500);
       return { error: 'Internal server error' };
     }
@@ -107,7 +107,7 @@ export async function matchmakingRoutes(fastify: FastifyInstance) {
 
       return { status: 'waiting' };
     } catch (error) {
-      fastify.log.error('Status check error:', error);
+      fastify.log.error(error, 'Status check error:');
       reply.code(500);
       return { error: 'Internal server error' };
     }
@@ -136,10 +136,10 @@ export async function matchmakingRoutes(fastify: FastifyInstance) {
       }
 
       match.status = status;
-      fastify.log.info('Updated match status:', { matchId, status });
+      fastify.log.info({ matchId, status }, 'Updated match status:');
       return { status: 'success' };
     } catch (error) {
-      fastify.log.error('Match update error:', error);
+      fastify.log.error(error, 'Match update error:');
       reply.code(500);
       return { error: 'Internal server error' };
     }
@@ -175,7 +175,7 @@ export async function matchmakingRoutes(fastify: FastifyInstance) {
 
       return { status: 'not_found' };
     } catch (error) {
-      fastify.log.error('Error leaving matchmaking:', error);
+      fastify.log.error(error, 'Error leaving matchmaking:');
       reply.code(500);
       return { error: 'Internal server error' };
     }

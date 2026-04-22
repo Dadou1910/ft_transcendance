@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyEnv from './config';
@@ -13,30 +13,11 @@ import { matchmakingRoutes } from './routes/matchmaking.js';
 import { sessionMiddleware } from './routes/middleware.js';
 import { wsRoutes } from './routes/ws.js';
 import { avatarRoutes } from './routes/avatar.js';
-import fs from 'fs';
-import path from 'path';
-import { Database } from 'sqlite3';
 
 async function buildServer() {
-  const fastify: FastifyInstance = Fastify({ 
-    logger: true,
-    https: {
-      key: fs.readFileSync(path.join(__dirname, '../certs/key.pem')),
-      cert: fs.readFileSync(path.join(__dirname, '../certs/cert.pem'))
-    }
-  });
+  const fastify: FastifyInstance = Fastify({ logger: true });
 
   await fastify.register(fastifyEnv);
-
-  // Create HTTP server for redirection if HTTPS_ONLY is true
-  if (fastify.config.HTTPS_ONLY) {
-    const httpServer = Fastify({ logger: true });
-    httpServer.all('/*', async (request: FastifyRequest, reply: FastifyReply) => {
-      const httpsUrl = `https://${request.hostname}${request.url}`;
-      reply.redirect(301, httpsUrl);
-    });
-    await httpServer.listen({ port: 80, host: '0.0.0.0' });
-  }
 
   await fastify.register(cors, { 
     origin: true,
@@ -66,14 +47,14 @@ async function buildServer() {
   await wsRoutes(fastify, db);
   await avatarRoutes(fastify, db);
 
-  fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/', async () => {
     return { status: 'Server is running' };
   });
 
-  fastify.addHook('onClose', (instance: FastifyInstance, done: (err?: Error) => void) => {
-    db.close((err) => {
+  fastify.addHook('onClose', (_instance: FastifyInstance, done: (err?: Error) => void) => {
+    db.close((err: Error | null) => {
       if (err) {
-        fastify.log.error('Error closing database:', err);
+        fastify.log.error(err, 'Error closing database:');
       }
       done();
     });

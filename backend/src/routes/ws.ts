@@ -1,9 +1,10 @@
-import { FastifyInstance } from 'fastify';
-import websocket, { SocketStream } from '@fastify/websocket';
+import { FastifyInstance, FastifyRequest } from 'fastify';
+import websocket from '@fastify/websocket';
+import { WebSocket } from 'ws';
 import { Database } from 'sqlite3';
 
 interface MatchClient {
-  socket: SocketStream;
+  socket: WebSocket;
   name: string;
   userId: number;
   ready: boolean;
@@ -27,7 +28,7 @@ export function isUserOnline(userId: number): boolean {
 }
 
 // Track active presence connections
-const presenceConnections = new Map<number, SocketStream>();
+const presenceConnections = new Map<number, WebSocket>();
 
 const matchClients: MatchClients = {};
 
@@ -37,7 +38,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
     await fastify.register(websocket);
   }
 
-  fastify.get('/ws/match/:matchId', { websocket: true }, async (connection: SocketStream, req) => {
+  fastify.get('/ws/match/:matchId', { websocket: true }, async (connection: WebSocket, req: FastifyRequest) => {
     const { matchId } = req.params as { matchId: string };
 
     // Extract token from query parameters
@@ -46,14 +47,14 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
     if (!token) {
       fastify.log.error('WebSocket connection attempt without token');
-      connection.socket.close();
+      connection.close();
       return;
     }
 
     try {
       // Validate the token
       const session = await new Promise<{ userId: number; expiresAt: string } | undefined>((resolve, reject) => {
-        db.get('SELECT userId, expiresAt FROM sessions WHERE token = ?', [token], (err, row: { userId: number; expiresAt: string } | undefined) => {
+        db.get('SELECT userId, expiresAt FROM sessions WHERE token = ?', [token], (err: Error | null, row: { userId: number; expiresAt: string } | undefined) => {
           if (err) reject(err);
           resolve(row);
         });
@@ -61,7 +62,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
       if (!session) {
         fastify.log.error('Invalid session token in WebSocket connection');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
@@ -69,13 +70,13 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
       const expiresAt = new Date(session.expiresAt);
       if (now > expiresAt) {
         fastify.log.error('Expired session token in WebSocket connection');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
       // Get user info
       const user = await new Promise<{ id: number; name: string } | undefined>((resolve, reject) => {
-        db.get('SELECT id, name FROM users WHERE id = ?', [session.userId], (err, row: { id: number; name: string } | undefined) => {
+        db.get('SELECT id, name FROM users WHERE id = ?', [session.userId], (err: Error | null, row: { id: number; name: string } | undefined) => {
           if (err) reject(err);
           resolve(row);
         });
@@ -83,7 +84,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
       if (!user) {
         fastify.log.error('User not found');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
@@ -102,8 +103,8 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
       if (existingConnection) {
         // Close old connection
-        if (existingConnection.socket.socket.readyState === 1) {
-          existingConnection.socket.socket.close();
+        if (existingConnection.socket.readyState === 1) {
+          existingConnection.socket.close();
         }
       }
 
@@ -123,7 +124,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
         matchClients[matchId].guest = client;
       } else {
         fastify.log.error('Match is full');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
@@ -140,13 +141,13 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
         message.gameState = matchClients[matchId].gameState;
       }
 
-      fastify.log.info(`Sending role assignment to ${user.name}:`, message);
-      connection.socket.send(JSON.stringify(message));
+      fastify.log.info({ message }, `Sending role assignment to ${user.name}:`);
+      connection.send(JSON.stringify(message));
 
       // If guest just joined or reconnected, notify host
       if (!isHost && matchClients[matchId].host) {
         fastify.log.info(`Notifying host (${matchClients[matchId].host.name}) about guest (${user.name})`);
-        matchClients[matchId].host.socket.socket.send(JSON.stringify({
+        matchClients[matchId].host.socket.send(JSON.stringify({
           type: 'opponent',
           name: user.name,
           reconnecting: !!existingConnection
@@ -155,15 +156,15 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
       // Start ping interval
       const pingInterval = setInterval(() => {
-        if (connection.socket.readyState === 1) {
-          connection.socket.send(JSON.stringify({ type: 'ping' }));
+        if (connection.readyState === 1) {
+          connection.send(JSON.stringify({ type: 'ping' }));
         }
       }, 30 * 1000);
 
-      connection.socket.on('message', async (message: Buffer) => {
+      connection.on('message', async (message: Buffer) => {
         try {
           const data = JSON.parse(message.toString());
-          fastify.log.info(`Received message from ${user.name}:`, data);
+          fastify.log.info({ data }, `Received message from ${user.name}:`);
 
           // Handle pong
           if (data.type === 'pong') {
@@ -174,7 +175,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
             }
             return;
           }
-          
+
           // Handle ready state
           if (data.type === 'ready') {
             fastify.log.info(`Player ${user.name} is ready`);
@@ -189,8 +190,8 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
             const guestReady = matchClients[matchId].guest?.ready || false;
 
             // Notify host about current states
-            if (matchClients[matchId].host?.socket.socket.readyState === 1) {
-              matchClients[matchId].host.socket.socket.send(JSON.stringify({
+            if (matchClients[matchId].host?.socket.readyState === 1) {
+              matchClients[matchId].host.socket.send(JSON.stringify({
                 type: 'ready_state',
                 hostReady,
                 guestReady
@@ -198,8 +199,8 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
             }
 
             // Notify guest about current states
-            if (matchClients[matchId].guest?.socket.socket.readyState === 1) {
-              matchClients[matchId].guest.socket.socket.send(JSON.stringify({
+            if (matchClients[matchId].guest?.socket.readyState === 1) {
+              matchClients[matchId].guest.socket.send(JSON.stringify({
                 type: 'ready_state',
                 hostReady,
                 guestReady
@@ -210,26 +211,26 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
             if (hostReady && guestReady) {
               fastify.log.info('Both players ready, starting game');
               try {
-                if (matchClients[matchId].host?.socket.socket.readyState === 1) {
+                if (matchClients[matchId].host?.socket.readyState === 1) {
                   fastify.log.info(`Sending game_start to host (${matchClients[matchId].host.name})`);
-                  matchClients[matchId].host.socket.socket.send(JSON.stringify({ type: 'game_start' }));
+                  matchClients[matchId].host.socket.send(JSON.stringify({ type: 'game_start' }));
                   fastify.log.info('Sent game_start to host');
                 } else {
                   fastify.log.warn('Host WebSocket not open when trying to send game_start');
                 }
               } catch (err) {
-                fastify.log.error('Error sending game_start to host:', err);
+                fastify.log.error(err, 'Error sending game_start to host:');
               }
               try {
-                if (matchClients[matchId].guest?.socket.socket.readyState === 1) {
+                if (matchClients[matchId].guest?.socket.readyState === 1) {
                   fastify.log.info(`Sending game_start to guest (${matchClients[matchId].guest.name})`);
-                  matchClients[matchId].guest.socket.socket.send(JSON.stringify({ type: 'game_start' }));
+                  matchClients[matchId].guest.socket.send(JSON.stringify({ type: 'game_start' }));
                   fastify.log.info('Sent game_start to guest');
                 } else {
                   fastify.log.warn('Guest WebSocket not open when trying to send game_start');
                 }
               } catch (err) {
-                fastify.log.error('Error sending game_start to guest:', err);
+                fastify.log.error(err, 'Error sending game_start to guest:');
               }
             }
             return;
@@ -242,16 +243,16 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
           // Relay messages to the appropriate client
           const targetClient = isHost ? matchClients[matchId].guest : matchClients[matchId].host;
-          if (targetClient?.socket.socket.readyState === 1) {
+          if (targetClient?.socket.readyState === 1) {
             fastify.log.debug(`Relaying message from ${user.name} to ${targetClient.name}`);
-            targetClient.socket.socket.send(message.toString());
+            targetClient.socket.send(message.toString());
           }
         } catch (err) {
-          fastify.log.error('Error processing WebSocket message:', err);
+          fastify.log.error(err, 'Error processing WebSocket message:');
         }
       });
 
-      connection.socket.on('close', async () => {
+      connection.on('close', async () => {
         clearInterval(pingInterval);
         fastify.log.info(`WebSocket connection closed for ${user.name}`);
 
@@ -265,9 +266,9 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
             url: '/matchmaking/leave',
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          fastify.log.info('Matchmaking leave response:', reply.json());
+          fastify.log.info({ response: reply.json() }, 'Matchmaking leave response:');
         } catch (error) {
-          fastify.log.error('Error calling matchmaking/leave:', error);
+          fastify.log.error(error, 'Error calling matchmaking/leave:');
         }
 
         // Only remove this specific client's connection
@@ -285,9 +286,9 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
         // Notify the other player about disconnection
         const otherPlayer = isHost ? matchClients[matchId]?.guest : matchClients[matchId]?.host;
-        if (otherPlayer?.socket.socket.readyState === 1) {
+        if (otherPlayer?.socket.readyState === 1) {
           fastify.log.info(`Notifying ${otherPlayer.name} about ${user.name}'s disconnection`);
-          otherPlayer.socket.socket.send(JSON.stringify({
+          otherPlayer.socket.send(JSON.stringify({
             type: 'opponent_disconnected',
             name: user.name
           }));
@@ -303,31 +304,31 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
         } else if (matchClients[matchId]?.gameState?.gameOver || !matchClients[matchId]?.host || !matchClients[matchId]?.guest) {
           // If the game has ended or one player has disconnected, clean up the entire match
           fastify.log.info(`Game ended or player disconnected, cleaning up match ${matchId}`);
-          if (matchClients[matchId]?.host?.socket.socket.readyState === 1) {
-            matchClients[matchId].host.socket.socket.close();
+          if (matchClients[matchId]?.host?.socket.readyState === 1) {
+            matchClients[matchId].host.socket.close();
           }
-          if (matchClients[matchId]?.guest?.socket.socket.readyState === 1) {
-            matchClients[matchId].guest.socket.socket.close();
+          if (matchClients[matchId]?.guest?.socket.readyState === 1) {
+            matchClients[matchId].guest.socket.close();
           }
           delete matchClients[matchId];
         }
       });
 
     } catch (err) {
-      fastify.log.error('Error validating WebSocket connection:', err);
-      connection.socket.close();
+      fastify.log.error(err, 'Error validating WebSocket connection:');
+      connection.close();
     }
   });
 
   // Lightweight presence WebSocket endpoint
-  fastify.get('/ws/presence', { websocket: true }, async (connection: SocketStream, req: any) => {
+  fastify.get('/ws/presence', { websocket: true }, async (connection: WebSocket, req: FastifyRequest) => {
     // Extract token from query parameters
     const url = new URL(req.url, `https://${req.headers.host}`);
     const token = url.searchParams.get('token');
 
     if (!token) {
       fastify.log.error('Presence WebSocket connection attempt without token');
-      connection.socket.close();
+      connection.close();
       return;
     }
 
@@ -342,7 +343,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
       if (!session) {
         fastify.log.error('Invalid session token in Presence WebSocket connection');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
@@ -350,7 +351,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
       const expiresAt = new Date(session.expiresAt);
       if (now > expiresAt) {
         fastify.log.error('Expired session token in Presence WebSocket connection');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
@@ -364,14 +365,14 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
 
       if (!user) {
         fastify.log.error('User not found (presence)');
-        connection.socket.close();
+        connection.close();
         return;
       }
 
       // Close any existing connection for this user
       const existingConnection = presenceConnections.get(user.id);
-      if (existingConnection && existingConnection.socket.readyState === 1) {
-        existingConnection.socket.close();
+      if (existingConnection && existingConnection.readyState === 1) {
+        existingConnection.close();
       }
 
       // Store the new connection
@@ -382,7 +383,7 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
       fastify.log.info(`User ${user.name} connected to presence WebSocket.`);
 
       // Handle connection close
-      connection.socket.on('close', () => {
+      connection.on('close', () => {
         // Only remove from online users if this is the most recent connection
         if (presenceConnections.get(user.id) === connection) {
           onlineUsers.delete(user.id);
@@ -392,20 +393,20 @@ export async function wsRoutes(fastify: FastifyInstance, db: Database) {
       });
 
       // Handle ping messages
-      connection.socket.on('message', (msg: Buffer) => {
+      connection.on('message', (msg: Buffer) => {
         try {
           const data = JSON.parse(msg.toString());
           if (data.type === 'ping') {
-            connection.socket.send(JSON.stringify({ type: 'pong' }));
+            connection.send(JSON.stringify({ type: 'pong' }));
           }
         } catch (err) {
-          fastify.log.error('Error processing presence message:', err);
+          fastify.log.error(err, 'Error processing presence message:');
         }
       });
 
     } catch (err) {
-      fastify.log.error('Error validating Presence WebSocket connection:', err);
-      connection.socket.close();
+      fastify.log.error(err, 'Error validating Presence WebSocket connection:');
+      connection.close();
     }
   });
-} 
+}

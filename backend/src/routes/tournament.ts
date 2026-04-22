@@ -52,10 +52,10 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
         });
       }
 
-      fastify.log.info('Created tournament with players:', { tournamentId, usernames });
+      fastify.log.info({ tournamentId, usernames }, 'Created tournament with players:');
       return { tournamentId };
     } catch (err) {
-      fastify.log.error('Tournament creation error:', err);
+      fastify.log.error(err, 'Tournament creation error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -107,7 +107,7 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
         });
       });
       if (!player1Exists || !player2Exists) {
-        fastify.log.error('Players not found in tournament:', { player1, player2, tournamentId });
+        fastify.log.error({ player1, player2, tournamentId }, 'Players not found in tournament:');
         reply.code(400);
         return { error: 'One or both players are not in the tournament' };
       }
@@ -123,10 +123,10 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
         );
       });
 
-      fastify.log.info('Created tournament match:', { matchId, tournamentId, player1, player2, roundNumber });
+      fastify.log.info({ matchId, tournamentId, player1, player2, roundNumber }, 'Created tournament match:');
       return { matchId };
     } catch (err) {
-      fastify.log.error('Tournament match creation error:', err);
+      fastify.log.error(err, 'Tournament match creation error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -159,7 +159,7 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
 
       // Check if the match already has a winner to prevent duplicate updates
       if (match.winner) {
-        fastify.log.info('Match winner already set, skipping update:', { matchId, existingWinner: match.winner });
+        fastify.log.info({ matchId, existingWinner: match.winner }, 'Match winner already set, skipping update:');
         return { status: 'Match winner already set', winner: match.winner };
       }
 
@@ -171,11 +171,11 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
       });
 
       // Log the round number for debugging
-      fastify.log.info('Processing match winner:', { tournamentId, matchId, roundNumber: match.roundNumber, winner });
+      fastify.log.info({ tournamentId, matchId, roundNumber: match.roundNumber, winner }, 'Processing match winner:');
 
       // For a 4-player tournament, the final match is Round 1 as per frontend definition
       if (match.roundNumber === 1) {
-        fastify.log.info('Final match (Round 1) detected, updating positions and tournamentsWon:', { winner });
+        fastify.log.info({ winner }, 'Final match (Round 1) detected, updating positions and tournamentsWon:');
 
         const loser = match.player1 === winner ? match.player2 : match.player1;
 
@@ -246,17 +246,17 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
               }
             });
           });
-          fastify.log.info('Updated tournamentsWon for user:', { winner });
+          fastify.log.info({ winner }, 'Updated tournamentsWon for user:');
         } else {
-          fastify.log.info('Winner is a placeholder, skipping tournamentsWon update:', { winner });
+          fastify.log.info({ winner }, 'Winner is a placeholder, skipping tournamentsWon update:');
         }
       } else {
-        fastify.log.info('Not the final match (Round 1), skipping tournamentsWon update:', { roundNumber: match.roundNumber });
+        fastify.log.info({ roundNumber: match.roundNumber }, 'Not the final match (Round 1), skipping tournamentsWon update:');
       }
 
       return { status: 'Match winner set' };
     } catch (err) {
-      fastify.log.error('Set tournament match winner error:', err);
+      fastify.log.error(err, 'Set tournament match winner error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -301,7 +301,7 @@ export async function tournamentRoutes(fastify: FastifyInstance, db: Database) {
 
       return { tournament, players, matches };
     } catch (err) {
-      fastify.log.error('Tournament fetch error:', err);
+      fastify.log.error(err, 'Tournament fetch error:');
       reply.code(500);
       return { error: 'Server error' };
     }

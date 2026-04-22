@@ -38,7 +38,7 @@ export async function statsRoutes(fastify: FastifyInstance, db: Database) {
 
       return { status: 'Stats updated' };
     } catch (err) {
-      fastify.log.error('Stats update error:', err);
+      fastify.log.error(err, 'Stats update error:');
       reply.code(500);
       return { error: 'Server error' };
     }

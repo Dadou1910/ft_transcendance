@@ -21,7 +21,7 @@ export async function settingsRoutes(fastify: FastifyInstance, db: Database) {
 
       return settings || { backgroundColor: '#d8a8b5', ballSpeed: 1.0 };
     } catch (err) {
-      fastify.log.error('Settings fetch error:', err);
+      fastify.log.error(err, 'Settings fetch error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -75,7 +75,7 @@ export async function settingsRoutes(fastify: FastifyInstance, db: Database) {
 
       return { status: 'Settings updated' };
     } catch (err) {
-      fastify.log.error('Settings update error:', err);
+      fastify.log.error(err, 'Settings update error:');
       reply.code(500);
       return { error: 'Server error' };
     }

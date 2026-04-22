@@ -32,9 +32,12 @@ FROM nginx:alpine
 # Copy built frontend
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy SSL certificates from the correct path
-COPY ssl/cert.pem /etc/ssl/certs/cert.pem
-COPY ssl/key.pem /etc/ssl/private/key.pem
+# Generate self-signed certificates
+RUN apk add --no-cache openssl && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/key.pem \
+    -out /etc/ssl/certs/cert.pem \
+    -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
 
 # Copy custom Nginx config
 COPY nginx-https.conf /etc/nginx/nginx.conf

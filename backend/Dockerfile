@@ -1,5 +1,12 @@
 # Use official Node.js image
-FROM node:20
+FROM ubuntu:24.04
+
+# Install Node.js 20 from NodeSource
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs openssl && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app

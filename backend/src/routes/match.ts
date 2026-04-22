@@ -14,14 +14,7 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
     const { userName, opponentName, userScore, opponentScore, gameType } = request.body;
     const user = request.user;
 
-    fastify.log.info('Received /match request:', { 
-      userName, 
-      opponentName, 
-      userScore, 
-      opponentScore, 
-      gameType,
-      authenticatedUser: user ? { id: user.id, name: user.name } : null
-    });
+    fastify.log.info({ userName, opponentName, userScore, opponentScore, gameType, authenticatedUser: user ? { id: user.id, name: user.name } : null }, 'Received /match request:');
 
     // Validate required fields
     if (!userName || !opponentName || userScore === undefined || opponentScore === undefined || !gameType) {
@@ -33,7 +26,7 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
     // Validate gameType
     const validGameTypes = ['Pong', 'Neon City Pong', 'AI Pong', 'Space Battle', 'Online Pong', 'Online Space Battle'];
     if (!validGameTypes.includes(gameType)) {
-      fastify.log.warn('Validation failed: Invalid gameType:', gameType);
+      fastify.log.warn({ gameType }, 'Validation failed: Invalid gameType:');
       reply.code(400);
       return { error: `Invalid gameType. Must be one of: ${validGameTypes.join(', ')}` };
     }
@@ -73,7 +66,7 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
           // Begin transaction
           db.run('BEGIN TRANSACTION', (err) => {
             if (err) {
-              fastify.log.error('Error starting transaction:', err);
+              fastify.log.error(err, 'Error starting transaction:');
               return reject(err);
             }
 
@@ -84,12 +77,12 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
               [userId || null, opponentId || null, userName, opponentName, userScore, opponentScore, gameType, date],
               function(err) {
                 if (err) {
-                  fastify.log.error('Error inserting into matches table:', err);
+                  fastify.log.error(err, 'Error inserting into matches table:');
                   db.run('ROLLBACK', () => reject(err));
                   return;
                 }
 
-                fastify.log.info('Inserted into matches table, matchId:', this.lastID);
+                fastify.log.info({ matchId: this.lastID }, 'Inserted into matches table:');
 
                 // Update wins/losses for registered users (if userId or opponentId exists)
                 const updates: Promise<void>[] = [];
@@ -101,10 +94,10 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
                       new Promise<void>((resolve, reject) => {
                         db.run('UPDATE users SET wins = wins + 1 WHERE id = ?', [userId], (err) => {
                           if (err) {
-                            fastify.log.error('Error updating wins for userId:', userId, err);
+                            fastify.log.error({ userId, err }, 'Error updating wins for userId:');
                             reject(err);
                           } else {
-                            fastify.log.info('Updated wins for userId:', userId);
+                            fastify.log.info({ userId }, 'Updated wins for userId:');
                             resolve();
                           }
                         });
@@ -116,10 +109,10 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
                       new Promise<void>((resolve, reject) => {
                         db.run('UPDATE users SET losses = losses + 1 WHERE id = ?', [opponentId], (err) => {
                           if (err) {
-                            fastify.log.error('Error updating losses for opponentId:', opponentId, err);
+                            fastify.log.error({ opponentId, err }, 'Error updating losses for opponentId:');
                             reject(err);
                           } else {
-                            fastify.log.info('Updated losses for opponentId:', opponentId);
+                            fastify.log.info({ opponentId }, 'Updated losses for opponentId:');
                             resolve();
                           }
                         });
@@ -133,10 +126,10 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
                       new Promise<void>((resolve, reject) => {
                         db.run('UPDATE users SET wins = wins + 1 WHERE id = ?', [opponentId], (err) => {
                           if (err) {
-                            fastify.log.error('Error updating wins for opponentId:', opponentId, err);
+                            fastify.log.error({ opponentId, err }, 'Error updating wins for opponentId:');
                             reject(err);
                           } else {
-                            fastify.log.info('Updated wins for opponentId:', opponentId);
+                            fastify.log.info({ opponentId }, 'Updated wins for opponentId:');
                             resolve();
                           }
                         });
@@ -148,10 +141,10 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
                       new Promise<void>((resolve, reject) => {
                         db.run('UPDATE users SET losses = losses + 1 WHERE id = ?', [userId], (err) => {
                           if (err) {
-                            fastify.log.error('Error updating losses for userId:', userId, err);
+                            fastify.log.error({ userId, err }, 'Error updating losses for userId:');
                             reject(err);
                           } else {
-                            fastify.log.info('Updated losses for userId:', userId);
+                            fastify.log.info({ userId }, 'Updated losses for userId:');
                             resolve();
                           }
                         });
@@ -166,7 +159,7 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
                     // Commit the transaction
                     db.run('COMMIT', (err) => {
                       if (err) {
-                        fastify.log.error('Error committing transaction:', err);
+                        fastify.log.error(err, 'Error committing transaction:');
                         db.run('ROLLBACK', () => reject(err));
                         return;
                       }
@@ -184,10 +177,10 @@ export async function matchRoutes(fastify: FastifyInstance, db: Database) {
         });
       });
 
-      fastify.log.info('Match recorded successfully, matchId:', matchId);
+      fastify.log.info({ matchId }, 'Match recorded successfully:');
       return { status: 'Match recorded', matchId };
     } catch (err) {
-      fastify.log.error('Match recording error:', err);
+      fastify.log.error(err, 'Match recording error:');
       reply.code(500);
       return { error: 'Server error' };
     }

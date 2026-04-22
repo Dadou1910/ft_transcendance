@@ -61,7 +61,7 @@ export async function sessionMiddleware(fastify: FastifyInstance, db: Database) 
 
       request.user = user;
     } catch (err) {
-      fastify.log.error('Session validation error:', err);
+      fastify.log.error(err, 'Session validation error:');
       if (!reply.statusCode || reply.statusCode < 400) {
         reply.code(500);
       }

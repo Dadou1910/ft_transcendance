@@ -36,9 +36,8 @@ Create a `.env` file at the root of the project:
 
 ```
 PORT=4000
-DB_PATH=./data/database.sqlite
+DB_PATH=/app/data/transcendance.db
 BCRYPT_SALT_ROUNDS=10
-API_IP=your.server.ip
 ```
 
 ## Running

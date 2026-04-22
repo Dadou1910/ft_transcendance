@@ -5,7 +5,7 @@ import { User, UserSettings, Match, Tournament, TournamentPlayer, TournamentMatc
 export async function initializeDatabase(fastify: FastifyInstance) {
   const db = new sqlite3.Database(fastify.config.DB_PATH, (err) => {
     if (err) {
-      fastify.log.error('Failed to connect to SQLite database:', err);
+      fastify.log.error(err, 'Failed to connect to SQLite database:');
       throw err;
     }
     fastify.log.info(`Connected to database at ${fastify.config.DB_PATH}`);
@@ -149,7 +149,7 @@ export async function initializeDatabase(fastify: FastifyInstance) {
 
     fastify.log.info('Database schema initialized');
   } catch (err) {
-    fastify.log.error('Failed to initialize database schema:', err);
+    fastify.log.error(err, 'Failed to initialize database schema:');
     throw err;
   }
 

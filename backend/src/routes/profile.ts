@@ -78,7 +78,7 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
         friends: friendsWithStatus,
       };
     } catch (err) {
-      fastify.log.error('Profile fetch error:', err);
+      fastify.log.error(err, 'Profile fetch error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -154,7 +154,7 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
         friends: friendsWithStatus,
       };
     } catch (err) {
-      fastify.log.error('Current user profile fetch error:', err);
+      fastify.log.error(err, 'Current user profile fetch error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -323,7 +323,7 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
         db.run('ROLLBACK', () => resolve());
       });
 
-      fastify.log.error('Profile update error:', err);
+      fastify.log.error(err, 'Profile update error:');
       reply.code(400);
       return { error: err instanceof Error ? err.message : 'Failed to update profile' };
     }
@@ -347,7 +347,7 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
       }
       return { user };
     } catch (err) {
-      fastify.log.error('User search error:', err);
+      fastify.log.error(err, 'User search error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -418,7 +418,7 @@ export async function profileRoutes(fastify: FastifyInstance, db: Database) {
       });
       return { status: 'Friend added' };
     } catch (err) {
-      fastify.log.error('Add friend error:', err);
+      fastify.log.error(err, 'Add friend error:');
       reply.code(500);
       return { error: 'Server error' };
     }

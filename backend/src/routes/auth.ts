@@ -103,16 +103,11 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
       const insertedUser = await new Promise<User | undefined>((resolve, reject) => {
         db.get('SELECT password FROM users WHERE id = ?', [lastID], (err: Error | null, row: User | undefined) => {
           if (err) {
-            fastify.log.error('[Register Debug] Error verifying inserted user:', {
-              error: err.message,
-              code: (err as any).code,
-              errno: (err as any).errno,
-              stack: err.stack
-            });
+            fastify.log.error({ error: err.message, code: (err as any).code, errno: (err as any).errno, stack: err.stack }, '[Register Debug] Error verifying inserted user:');
             reject(err);
             return;
           }
-          fastify.log.info('[Register Debug] User verification result:', { exists: !!row });
+          fastify.log.info({ exists: !!row }, '[Register Debug] User verification result:');
           resolve(row);
         });
       });
@@ -126,11 +121,7 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
       fastify.log.info('[Register Debug] Registration completed successfully');
       reply.code(201).send({ message: 'User created successfully' });
     } catch (err) {
-      fastify.log.error('[Register Debug] Registration error:', {
-        error: err instanceof Error ? err.message : 'Unknown error',
-        stack: err instanceof Error ? err.stack : undefined,
-        type: err instanceof Error ? err.constructor.name : typeof err
-      });
+      fastify.log.error({ error: err instanceof Error ? err.message : 'Unknown error', stack: err instanceof Error ? err.stack : undefined, type: err instanceof Error ? err.constructor.name : typeof err }, '[Register Debug] Registration error:');
       reply.code(500).send({ 
         error: 'Internal server error', 
         details: err instanceof Error ? err.message : 'Unknown error'
@@ -171,7 +162,7 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
       try {
         match = await compare(password, user.password);
       } catch (compareErr) {
-        fastify.log.error('bcrypt compare error:', compareErr);
+        fastify.log.error(compareErr, 'bcrypt compare error:');
         reply.code(500);
         return { error: 'Password verification failed' };
       }
@@ -209,7 +200,7 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
         sessionToken
       };
     } catch (err) {
-      fastify.log.error('Login error:', err);
+      fastify.log.error(err, 'Login error:');
       reply.code(500);
       return { error: 'Server error' };
     }
@@ -248,7 +239,7 @@ export async function authRoutes(fastify: FastifyInstance, db: Database) {
 
       return { message: 'Logged out successfully' };
     } catch (err) {
-      fastify.log.error('Logout error:', err);
+      fastify.log.error(err, 'Logout error:');
       reply.code(500);
       return { error: 'Server error' };
     }
