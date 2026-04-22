@@ -17,7 +17,7 @@
     "@fastify/multipart": "^8.0.0",
     "@fastify/websocket": "^8.3.1",
     "bcrypt": "^5.1.1",
-    "fastify": "^4.28.1",
+    "fastify": "^5.8.5",
     "sqlite3": "^5.1.7",
     "ws": "^8.16.0",
     "redis": "^4.6.7"
